@@ -1,5 +1,5 @@
-import { Capacitor } from '@capacitor/core';
-import { App } from '@capacitor/app';
+import { Capacitor } from "@capacitor/core";
+import { App } from "@capacitor/app";
 
 class MobileNavigationService {
   constructor() {
@@ -18,25 +18,25 @@ class MobileNavigationService {
 
     try {
       // Handle hardware back button on mobile
-      await App.addListener('backButton', (event) => {
-        console.log('📱 Hardware back button pressed');
+      await App.addListener("backButton", (event) => {
+        console.log("📱 Hardware back button pressed");
         this.handleBackButton(event);
       });
 
       // Handle app state changes
-      await App.addListener('appStateChange', (state) => {
-        console.log('📱 App state changed:', state);
+      await App.addListener("appStateChange", (state) => {
+        console.log("📱 App state changed:", state);
         if (state.isActive) {
-          console.log('📱 App became active');
+          console.log("📱 App became active");
         } else {
-          console.log('📱 App went to background');
+          console.log("📱 App went to background");
         }
       });
 
       this.isInitialized = true;
-      console.log('✅ Mobile navigation service initialized');
+      console.log("✅ Mobile navigation service initialized");
     } catch (error) {
-      console.error('❌ Failed to initialize mobile navigation:', error);
+      console.error("❌ Failed to initialize mobile navigation:", error);
     }
   }
 
@@ -46,15 +46,15 @@ class MobileNavigationService {
   handleBackButton(event) {
     // Check if any listeners want to handle the back button
     let handled = false;
-    
-    this.backButtonListeners.forEach(listener => {
+
+    this.backButtonListeners.forEach((listener) => {
       try {
         const result = listener();
         if (result === true) {
           handled = true;
         }
       } catch (error) {
-        console.error('Error in back button listener:', error);
+        console.error("Error in back button listener:", error);
       }
     });
 
@@ -74,7 +74,7 @@ class MobileNavigationService {
    */
   addBackButtonListener(callback) {
     this.backButtonListeners.add(callback);
-    
+
     // Return unsubscribe function
     return () => {
       this.backButtonListeners.delete(callback);
@@ -86,7 +86,7 @@ class MobileNavigationService {
    */
   pushRoute(route) {
     this.navigationStack.push(route);
-    console.log('📱 Navigation stack:', this.navigationStack);
+    console.log("📱 Navigation stack:", this.navigationStack);
   }
 
   /**
@@ -94,7 +94,7 @@ class MobileNavigationService {
    */
   popRoute() {
     const route = this.navigationStack.pop();
-    console.log('📱 Navigation stack after pop:', this.navigationStack);
+    console.log("📱 Navigation stack after pop:", this.navigationStack);
     return route;
   }
 
@@ -110,7 +110,7 @@ class MobileNavigationService {
    */
   clearNavigationStack() {
     this.navigationStack = [];
-    console.log('📱 Navigation stack cleared');
+    console.log("📱 Navigation stack cleared");
   }
 
   /**
@@ -121,13 +121,13 @@ class MobileNavigationService {
       if (Capacitor.isNativePlatform()) {
         // Send app to background
         await App.minimizeApp();
-        console.log('📱 App minimized');
+        console.log("📱 App minimized");
       } else {
         // For web, just log
-        console.log('📱 Back button pressed on web - staying in app');
+        console.log("📱 Back button pressed on web - staying in app");
       }
     } catch (error) {
-      console.error('❌ Failed to minimize app:', error);
+      console.error("❌ Failed to minimize app:", error);
     }
   }
 
@@ -136,7 +136,7 @@ class MobileNavigationService {
    */
   handleDeepNavigation(currentPath, targetPath) {
     console.log(`📱 Navigating from ${currentPath} to ${targetPath}`);
-    
+
     // Add current path to stack if not already there
     if (this.navigationStack[this.navigationStack.length - 1] !== currentPath) {
       this.pushRoute(currentPath);
@@ -158,29 +158,31 @@ class MobileNavigationService {
 
     // Get previous route
     const previousRoute = this.popRoute();
-    
+
     if (previousRoute) {
       return previousRoute;
     }
 
     // Default fallback routes
     const fallbackRoutes = {
-      '/profile': '/chat',
-      '/contact-sync': '/chat',
-      '/group-details': '/chat',
-      '/call-history': '/chat',
-      '/chat': '/', // Go to user list
+      "/profile": "/chat",
+      "/contact-sync": "/chat",
+      "/group-details": "/chat",
+      "/call-history": "/chat",
+      "/chat": "/", // Go to user list
     };
 
-    return fallbackRoutes[currentPath] || '/chat';
+    return fallbackRoutes[currentPath] || "/chat";
   }
 
   /**
    * Check if app should close or navigate back
    */
   shouldCloseApp(currentPath) {
-    const homeRoutes = ['/', '/chat', '/login'];
-    return homeRoutes.includes(currentPath) && this.navigationStack.length === 0;
+    const homeRoutes = ["/", "/chat", "/login"];
+    return (
+      homeRoutes.includes(currentPath) && this.navigationStack.length === 0
+    );
   }
 }
 
