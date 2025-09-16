@@ -40,10 +40,10 @@ Before building, update the server URL in `src/config/mobileConfig.js`:
 ```javascript
 const getBaseURL = () => {
   if (isMobile) {
-    // Replace with your actual production server URL
-    return 'https://your-production-server.com';
+    // Production server URL
+    return 'https://chatnew.pizeonfly.com';
   } else {
-    return 'http://localhost:3000';
+    return 'http://localhost:5000';
   }
 };
 ```

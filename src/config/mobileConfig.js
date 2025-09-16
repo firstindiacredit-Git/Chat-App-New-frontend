@@ -1,11 +1,11 @@
 // Mobile configuration for API endpoints
 const isMobile = window.Capacitor !== undefined;
 
-// Base API URL - Uses environment variables with fallbacks
+// Base API URL - Uses environment variables with production fallbacks
 const getBaseURL = () => {
   if (isMobile) {
-    // For mobile app, use environment variable or production fallback
-    return import.meta.env.VITE_API_BASE_URL || "http://43.204.147.171:8000";
+    // For mobile app, use production server
+    return import.meta.env.VITE_API_BASE_URL || "https://chatnew.pizeonfly.com";
   } else {
     // For web development, use environment variable or localhost fallback
     return import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -14,7 +14,7 @@ const getBaseURL = () => {
 
 const getSocketURL = () => {
   if (isMobile) {
-    return import.meta.env.VITE_SOCKET_URL || "http://43.204.147.171:8000";
+    return import.meta.env.VITE_SOCKET_URL || "https://chatnew.pizeonfly.com";
   } else {
     return import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
   }

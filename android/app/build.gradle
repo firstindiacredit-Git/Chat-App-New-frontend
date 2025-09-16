@@ -31,8 +31,14 @@ android {
 }
 
 repositories {
-    flatDir{
-        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    // Use maven local and file repositories instead of flatDir
+    mavenLocal()
+    google()
+    mavenCentral()
+    
+    // Only use flatDir if absolutely necessary for local libs
+    flatDir {
+        dirs 'libs'
     }
 }
 

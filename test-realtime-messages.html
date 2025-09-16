@@ -92,7 +92,7 @@
             // Use a test token (you'll need to replace this with a real token)
             const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2NzhmYjQ4YzQ4YzQ4YzQ4YzQ4YzQ4YzQiLCJpYXQiOjE3MzQ5NjQ4MDAsImV4cCI6MTczNDk2ODQwMH0.test';
             
-            socket = io('http://localhost:8000', {
+            socket = io('https://chatnew.pizeonfly.com', {
                 auth: { token: testToken },
                 transports: ['websocket', 'polling']
             });
