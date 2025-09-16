@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { API_CONFIG } from '../config/mobileConfig'
 import { useSocket } from '../contexts/SocketContext'
+import { 
+  isMobilePlatform, 
+  getDeviceInfo, 
+  requestContactsPermission, 
+  getDeviceContacts,
+  showPermissionExplanation,
+  formatPermissionsStatus
+} from '../utils/mobilePermissions'
 
 const ContactSync = ({ user, onBack, onUserSelect }) => {
   const { isUserOnline } = useSocket()
@@ -14,15 +22,21 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
   const [manualPhones, setManualPhones] = useState('')
   const [isMobile, setIsMobile] = useState(false)
   const [showQRCode, setShowQRCode] = useState(false)
+  const [deviceInfo, setDeviceInfo] = useState(null)
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false)
 
-  // Detect mobile device
+  // Detect mobile device and get device info
   useEffect(() => {
-    const checkMobile = () => {
-      const userAgent = navigator.userAgent || navigator.vendor || window.opera
-      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent)
+    const initMobileCheck = async () => {
+      const isMobileDevice = isMobilePlatform() || /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent)
       setIsMobile(isMobileDevice)
+      
+      if (isMobileDevice) {
+        const info = await getDeviceInfo()
+        setDeviceInfo(info)
+      }
     }
-    checkMobile()
+    initMobileCheck()
   }, [])
 
   // Check if contacts API is available
@@ -30,30 +44,18 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
     return 'contacts' in navigator && 'ContactsManager' in window
   }
 
-  // Request contacts permission
-  const requestContactsPermission = async () => {
-    if (!isContactsAPIAvailable()) {
-      setError('Contacts API is not available in this browser. Please use a supported browser.')
-      return false
-    }
-
+  // Request contacts permission using mobile utilities
+  const requestContactsPermissionMobile = async () => {
     try {
-      const permission = await navigator.permissions.query({ name: 'contacts' })
+      const result = await requestContactsPermission()
       
-      if (permission.state === 'granted') {
+      if (result.granted) {
         setPermissionGranted(true)
         return true
-      } else if (permission.state === 'prompt') {
-        // Try to access contacts to trigger permission prompt
-        const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true })
-        if (contacts && contacts.length > 0) {
-          setPermissionGranted(true)
-          return true
-        }
+      } else {
+        setError(result.message)
+        return false
       }
-      
-      setError('Contacts permission denied. Please allow access to contacts to sync.')
-      return false
     } catch (err) {
       console.error('Error requesting contacts permission:', err)
       setError('Failed to request contacts permission. Please try again.')
@@ -61,16 +63,20 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
     }
   }
 
-  // Get contacts from device
-  const getContacts = async () => {
-    if (!isContactsAPIAvailable()) {
-      setError('Contacts API is not available in this browser.')
-      return []
-    }
-
+  // Get contacts from device using mobile utilities
+  const getContactsMobile = async () => {
     try {
-      const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true })
-      return contacts || []
+      const result = await getDeviceContacts()
+      
+      if (result.success) {
+        return result.contacts.map(contact => ({
+          name: [contact.name],
+          tel: contact.phoneNumbers
+        }))
+      } else {
+        setError(result.message)
+        return []
+      }
     } catch (err) {
       console.error('Error getting contacts:', err)
       setError('Failed to get contacts. Please try again.')
@@ -116,7 +122,7 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
         }
       } else {
         // Use device contacts API
-        deviceContacts = await getContacts()
+        deviceContacts = await getContactsMobile()
         
         if (deviceContacts.length === 0) {
           setError('No contacts found on your device.')
@@ -173,10 +179,17 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
     }
   }
 
+  // Show permission explanation dialog
+  const showPermissionExplanationDialog = () => {
+    const explanation = showPermissionExplanation()
+    setShowPermissionDialog(true)
+    return explanation
+  }
+
   // Start sync process
   const handleStartSync = async () => {
     if (inputMethod === 'auto' && !permissionGranted) {
-      const granted = await requestContactsPermission()
+      const granted = await requestContactsPermissionMobile()
       if (!granted) return
     }
     
@@ -269,7 +282,54 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
       </div>
 
       <div className="contact-sync-content">
-        {!isContactsAPIAvailable() && (
+        {/* Device Info Display */}
+        {isMobile && deviceInfo && (
+          <div className="device-info">
+            <div className="device-icon">📱</div>
+            <p><strong>Device:</strong> {deviceInfo.model} ({deviceInfo.platform})</p>
+            {deviceInfo.osVersion && (
+              <p><strong>OS:</strong> {deviceInfo.operatingSystem} {deviceInfo.osVersion}</p>
+            )}
+          </div>
+        )}
+
+        {/* Permission Dialog */}
+        {showPermissionDialog && (
+          <div className="permission-dialog">
+            <div className="dialog-content">
+              <h4>📱 Permissions Required</h4>
+              <p>This app needs access to your contacts to find friends who are using ChatApp.</p>
+              <div className="permission-list">
+                <div className="permission-item">
+                  <span className="permission-icon">📱</span>
+                  <div>
+                    <strong>Contacts</strong>
+                    <p>Find friends who are using this app</p>
+                  </div>
+                </div>
+              </div>
+              <div className="dialog-actions">
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => setShowPermissionDialog(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    setShowPermissionDialog(false)
+                    await handleStartSync()
+                  }}
+                >
+                  Grant Permission
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isMobile && !isContactsAPIAvailable() && (
           <div className="error-message">
             <div className="error-icon">⚠️</div>
             <h4>Contacts API Not Available</h4>
@@ -290,7 +350,7 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
               <h4>Choose how to find friends:</h4>
               
               <div className="method-options">
-                {isContactsAPIAvailable() && (
+                {(isMobile || isContactsAPIAvailable()) && (
                   <label className="method-option">
                     <input
                       type="radio"
@@ -302,9 +362,9 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
                     <div className="method-content">
                       <div className="method-icon">📱</div>
                       <div>
-                        <strong>Auto Sync</strong>
-                        <p>Access your phone contacts automatically</p>
-                        <small>Works on Chrome, Edge, Opera</small>
+                        <strong>{isMobile ? 'Mobile Sync' : 'Auto Sync'}</strong>
+                        <p>{isMobile ? 'Access your phone contacts' : 'Access your browser contacts'}</p>
+                        <small>{isMobile ? 'Native mobile app' : 'Works on Chrome, Edge, Opera'}</small>
                       </div>
                     </div>
                   </label>
@@ -359,11 +419,18 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
             
             <button 
               className="btn btn-primary sync-btn"
-              onClick={handleStartSync}
+              onClick={() => {
+                if (isMobile && inputMethod === 'auto' && !permissionGranted) {
+                  showPermissionExplanationDialog()
+                } else {
+                  handleStartSync()
+                }
+              }}
               disabled={loading || (inputMethod === 'manual' && !manualPhones.trim())}
             >
               {loading ? 'Finding Friends...' : 
-               inputMethod === 'manual' ? 'Find Friends' : 'Sync Contacts'}
+               inputMethod === 'manual' ? 'Find Friends' : 
+               isMobile ? 'Sync Contacts' : 'Sync Contacts'}
             </button>
 
             {/* QR Code Sharing */}

@@ -5,27 +5,48 @@ import Signup from './components/Signup'
 import Chat from './components/Chat'
 import OTPVerification from './components/OTPVerification'
 import UserList from './components/UserList'
+import MobilePermissions from './components/MobilePermissions'
 import { SocketProvider } from './contexts/SocketContext'
 import { API_CONFIG } from './config/mobileConfig'
+import { isMobilePlatform } from './utils/mobilePermissions'
 import './App.css'
 
 function App() {
   const [user, setUser] = React.useState(null)
   const [isAuthenticated, setIsAuthenticated] = React.useState(false)
+  const [showPermissions, setShowPermissions] = React.useState(false)
+  const [permissionsChecked, setPermissionsChecked] = React.useState(false)
 
-  // Check for existing user on app load
+  // Check for existing user and mobile permissions on app load
   React.useEffect(() => {
-    const savedUser = localStorage.getItem('user')
-    if (savedUser) {
-      try {
-        const userData = JSON.parse(savedUser)
-        setUser(userData)
-        setIsAuthenticated(true)
-      } catch (error) {
-        console.error('Error parsing saved user:', error)
-        localStorage.removeItem('user')
+    const initializeApp = async () => {
+      // Check for existing user
+      const savedUser = localStorage.getItem('user')
+      if (savedUser) {
+        try {
+          const userData = JSON.parse(savedUser)
+          setUser(userData)
+          setIsAuthenticated(true)
+        } catch (error) {
+          console.error('Error parsing saved user:', error)
+          localStorage.removeItem('user')
+        }
+      }
+
+      // Check if we need to show permissions for mobile
+      if (isMobilePlatform()) {
+        const permissionsShown = localStorage.getItem('mobile_permissions_shown')
+        if (!permissionsShown) {
+          setShowPermissions(true)
+        } else {
+          setPermissionsChecked(true)
+        }
+      } else {
+        setPermissionsChecked(true)
       }
     }
+
+    initializeApp()
   }, [])
 
   const handleLogin = (userData) => {
@@ -52,6 +73,50 @@ function App() {
         console.error('Logout API call failed:', error)
       })
     }
+  }
+
+  const handlePermissionsGranted = (permissionResults) => {
+    console.log('Permissions granted:', permissionResults)
+    localStorage.setItem('mobile_permissions_shown', 'true')
+    localStorage.setItem('mobile_permissions_status', JSON.stringify(permissionResults))
+    setShowPermissions(false)
+    setPermissionsChecked(true)
+  }
+
+  const handlePermissionsSkipped = () => {
+    console.log('Permissions skipped')
+    localStorage.setItem('mobile_permissions_shown', 'true')
+    localStorage.setItem('mobile_permissions_status', JSON.stringify({ allGranted: false, skipped: true }))
+    setShowPermissions(false)
+    setPermissionsChecked(true)
+  }
+
+  // Show permissions screen if needed
+  if (showPermissions && !permissionsChecked) {
+    return (
+      <MobilePermissions 
+        onPermissionsGranted={handlePermissionsGranted}
+        onSkip={handlePermissionsSkipped}
+      />
+    )
+  }
+
+  // Don't render main app until permissions are checked
+  if (!permissionsChecked) {
+    return (
+      <div className="app">
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          height: '100vh',
+          flexDirection: 'column'
+        }}>
+          <div className="loading-spinner" style={{ marginBottom: '1rem' }}></div>
+          <p>Loading ChatApp...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
