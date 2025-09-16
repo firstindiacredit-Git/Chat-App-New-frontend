@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { API_CONFIG } from '../config/mobileConfig'
 import { useSocket } from '../contexts/SocketContext'
+import MobileLayout from './MobileLayout'
 import { 
   isMobilePlatform, 
   getDeviceInfo, 
@@ -275,18 +276,11 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
   }
 
   return (
-    <div className="contact-sync-container">
-      <div className="contact-sync-header">
-        <button 
-          className="back-btn"
-          onClick={onBack}
-        >
-          ←
-        </button>
-        <h3>Sync Contacts</h3>
-        <div style={{ width: '40px' }}></div>
-      </div>
-
+    <MobileLayout 
+      title="Sync Contacts"
+      showBackButton={true}
+      onBackClick={onBack}
+    >
       <div className="contact-sync-content">
         {/* Device Info Display */}
         {isMobile && deviceInfo && (
@@ -611,7 +605,7 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
           </div>
         )}
       </div>
-    </div>
+    </MobileLayout>
   )
 }
 

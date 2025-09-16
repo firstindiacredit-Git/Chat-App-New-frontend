@@ -12,6 +12,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #f0f0f0;
   overflow-x: hidden;
+  /* Mobile viewport fixes */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Prevent bouncing on mobile */
+  overscroll-behavior: none;
 }
 
 #root {

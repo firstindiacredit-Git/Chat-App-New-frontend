@@ -23,6 +23,10 @@
     },
     "Contacts": {
       "permissions": ["contacts"]
+    },
+    "App": {
+      "backButtonExitApp": false,
+      "hardwareBackButton": true
     }
   }
 }

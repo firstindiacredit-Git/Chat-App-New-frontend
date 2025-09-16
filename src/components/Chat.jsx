@@ -9,7 +9,9 @@ import GroupManagement from './GroupManagement'
 import CallHistory from './CallHistory'
 import CallButton from './CallButton'
 import JitsiMeet from './JitsiMeet'
+import MobileLayout from './MobileLayout'
 import { useSocket } from '../contexts/SocketContext'
+import { isMobilePlatform } from '../utils/mobilePermissions'
 
 const Chat = ({ user, onLogout }) => {
   const { socket, isConnected, isUserOnline } = useSocket()
