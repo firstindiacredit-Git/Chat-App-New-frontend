@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contacts Sync Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+            color: #0c5460;
+        }
+        button {
+            background: #25D366;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #128C7E;
+        }
+        .phone-input {
+            width: 100%;
+            height: 100px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Contacts Sync Test</h1>
+        
+        <div class="test-section info">
+            <h3>🔍 Platform Detection</h3>
+            <p><strong>User Agent:</strong> <span id="userAgent"></span></p>
+            <p><strong>Platform:</strong> <span id="platform"></span></p>
+            <p><strong>Is Mobile:</strong> <span id="isMobile"></span></p>
+            <p><strong>Capacitor Available:</strong> <span id="capacitorAvailable"></span></p>
+        </div>
+
+        <div class="test-section">
+            <h3>📞 Manual Contact Sync Test</h3>
+            <p>Enter phone numbers to test the backend API:</p>
+            <textarea class="phone-input" id="phoneNumbers" placeholder="Enter phone numbers, one per line:&#10;1234567890&#10;9876543210&#10;+1234567890"></textarea>
+            <button onclick="testManualSync()">🔍 Test Manual Sync</button>
+            <div id="manualResults" class="results" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📱 Mobile Permissions Test</h3>
+            <button onclick="testMobilePermissions()">📲 Test Mobile Permissions</button>
+            <div id="permissionResults" class="results" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🌐 Web Contacts API Test</h3>
+            <button onclick="testWebContactsAPI()">🌍 Test Web Contacts API</button>
+            <div id="webResults" class="results" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📡 Backend Connection Test</h3>
+            <button onclick="testBackendConnection()">🔗 Test Backend API</button>
+            <div id="backendResults" class="results" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize platform detection
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('userAgent').textContent = navigator.userAgent;
+            document.getElementById('platform').textContent = navigator.platform;
+            
+            const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent);
+            document.getElementById('isMobile').textContent = isMobile ? 'Yes' : 'No';
+            
+            const capacitorAvailable = typeof window.Capacitor !== 'undefined';
+            document.getElementById('capacitorAvailable').textContent = capacitorAvailable ? 'Yes' : 'No';
+        });
+
+        // Test manual sync functionality
+        async function testManualSync() {
+            const phoneNumbers = document.getElementById('phoneNumbers').value;
+            const resultsDiv = document.getElementById('manualResults');
+            
+            if (!phoneNumbers.trim()) {
+                showResult(resultsDiv, 'Please enter some phone numbers', 'error');
+                return;
+            }
+
+            try {
+                showResult(resultsDiv, 'Testing manual sync...', 'info');
+                
+                // Parse phone numbers
+                const lines = phoneNumbers.split('\n').filter(line => line.trim());
+                const phones = [];
+                
+                lines.forEach(line => {
+                    const matches = line.match(/\b\d{10,15}\b/g);
+                    if (matches) {
+                        phones.push(...matches);
+                    }
+                });
+
+                if (phones.length === 0) {
+                    showResult(resultsDiv, 'No valid phone numbers found. Please enter 10-15 digit numbers.', 'error');
+                    return;
+                }
+
+                // Test backend API call
+                const response = await fetch('http://localhost:5000/api/auth/find-users-by-phones', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer test-token' // Replace with actual token
+                    },
+                    body: JSON.stringify({
+                        phoneNumbers: phones
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult(resultsDiv, 
+                        `✅ Manual sync successful!<br>
+                        📞 Searched: ${data.data.searchedPhones} phone numbers<br>
+                        👥 Found: ${data.data.totalFound} users<br>
+                        📋 Results: ${JSON.stringify(data.data.foundUsers, null, 2)}`, 
+                        'success'
+                    );
+                } else {
+                    showResult(resultsDiv, `❌ Backend error: ${data.message}`, 'error');
+                }
+
+            } catch (error) {
+                showResult(resultsDiv, `❌ Network error: ${error.message}`, 'error');
+            }
+        }
+
+        // Test mobile permissions
+        async function testMobilePermissions() {
+            const resultsDiv = document.getElementById('permissionResults');
+            showResult(resultsDiv, 'Testing mobile permissions...', 'info');
+
+            try {
+                if (typeof window.Capacitor === 'undefined') {
+                    showResult(resultsDiv, '⚠️ Capacitor not available. Running in browser mode.', 'error');
+                    return;
+                }
+
+                // Test if plugins are available
+                const tests = [];
+                
+                if (window.Capacitor.Plugins.Device) {
+                    try {
+                        const deviceInfo = await window.Capacitor.Plugins.Device.getInfo();
+                        tests.push(`✅ Device Plugin: ${deviceInfo.platform} ${deviceInfo.osVersion}`);
+                    } catch (error) {
+                        tests.push(`❌ Device Plugin Error: ${error.message}`);
+                    }
+                }
+
+                if (window.Capacitor.Plugins.Contacts) {
+                    try {
+                        const permission = await window.Capacitor.Plugins.Contacts.checkPermissions();
+                        tests.push(`✅ Contacts Plugin Available: ${permission.contacts}`);
+                    } catch (error) {
+                        tests.push(`❌ Contacts Plugin Error: ${error.message}`);
+                    }
+                } else {
+                    tests.push('❌ Contacts Plugin: Not available');
+                }
+
+                showResult(resultsDiv, tests.join('<br>'), tests.some(t => t.includes('❌')) ? 'error' : 'success');
+
+            } catch (error) {
+                showResult(resultsDiv, `❌ Permission test error: ${error.message}`, 'error');
+            }
+        }
+
+        // Test web contacts API
+        async function testWebContactsAPI() {
+            const resultsDiv = document.getElementById('webResults');
+            showResult(resultsDiv, 'Testing web contacts API...', 'info');
+
+            if ('contacts' in navigator && 'ContactsManager' in window) {
+                try {
+                    // This will trigger permission request
+                    const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+                    showResult(resultsDiv, 
+                        `✅ Web Contacts API works!<br>
+                        📞 Found ${contacts.length} contacts<br>
+                        📋 Sample: ${JSON.stringify(contacts.slice(0, 2), null, 2)}`, 
+                        'success'
+                    );
+                } catch (error) {
+                    showResult(resultsDiv, `❌ Web Contacts API error: ${error.message}`, 'error');
+                }
+            } else {
+                showResult(resultsDiv, '⚠️ Web Contacts API not available in this browser', 'error');
+            }
+        }
+
+        // Test backend connection
+        async function testBackendConnection() {
+            const resultsDiv = document.getElementById('backendResults');
+            showResult(resultsDiv, 'Testing backend connection...', 'info');
+
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/users');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult(resultsDiv, 
+                        `✅ Backend connection successful!<br>
+                        👥 Total users: ${data.data.totalUsers}<br>
+                        📋 Sample users: ${JSON.stringify(data.data.users.slice(0, 3), null, 2)}`, 
+                        'success'
+                    );
+                } else {
+                    showResult(resultsDiv, `❌ Backend error: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult(resultsDiv, `❌ Backend connection error: ${error.message}`, 'error');
+            }
+        }
+
+        // Helper function to show results
+        function showResult(element, message, type) {
+            element.style.display = 'block';
+            element.className = `results ${type}`;
+            element.innerHTML = message;
+        }
+    </script>
+</body>
+</html>
