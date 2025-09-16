@@ -120,6 +120,16 @@ export const requestContactsPermission = async () => {
       }
     }
 
+    // Check if Contacts plugin is available
+    if (!Contacts || typeof Contacts.requestPermissions !== "function") {
+      console.error("Contacts plugin not available");
+      return {
+        granted: false,
+        message:
+          "Contacts plugin not properly installed. Please use manual entry.",
+      };
+    }
+
     const permission = await Contacts.requestPermissions();
 
     if (permission.contacts === "granted") {
@@ -129,7 +139,27 @@ export const requestContactsPermission = async () => {
     }
   } catch (error) {
     console.error("Error requesting contacts permission:", error);
-    return { granted: false, message: "Error requesting contacts permission" };
+
+    // Provide specific error messages based on error type
+    if (error.message && error.message.includes("not implemented")) {
+      return {
+        granted: false,
+        message:
+          "Contacts feature not available on this device. Please use manual entry.",
+      };
+    } else if (error.message && error.message.includes("permission")) {
+      return {
+        granted: false,
+        message:
+          "Contacts permission was denied. Please enable it in device settings or use manual entry.",
+      };
+    } else {
+      return {
+        granted: false,
+        message:
+          "Unable to access contacts. Please use manual phone number entry.",
+      };
+    }
   }
 };
 
@@ -168,6 +198,17 @@ export const getDeviceContacts = async () => {
     }
 
     // For mobile platforms
+    // Check if Contacts plugin is available
+    if (!Contacts || typeof Contacts.getContacts !== "function") {
+      console.error("Contacts plugin not available");
+      return {
+        success: false,
+        contacts: [],
+        message:
+          "Contacts plugin not properly installed. Please use manual entry.",
+      };
+    }
+
     const result = await Contacts.getContacts({
       projection: {
         name: true,
@@ -185,11 +226,30 @@ export const getDeviceContacts = async () => {
     };
   } catch (error) {
     console.error("Error getting device contacts:", error);
-    return {
-      success: false,
-      contacts: [],
-      message: "Error getting device contacts",
-    };
+
+    // Provide specific error messages
+    if (error.message && error.message.includes("not implemented")) {
+      return {
+        success: false,
+        contacts: [],
+        message:
+          "Contacts feature not available on this device. Please use manual entry.",
+      };
+    } else if (error.message && error.message.includes("permission")) {
+      return {
+        success: false,
+        contacts: [],
+        message:
+          "Contacts permission denied. Please enable it in settings or use manual entry.",
+      };
+    } else {
+      return {
+        success: false,
+        contacts: [],
+        message:
+          "Unable to access contacts. Please use manual phone number entry.",
+      };
+    }
   }
 };
 

@@ -125,7 +125,8 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
         deviceContacts = await getContactsMobile()
         
         if (deviceContacts.length === 0) {
-          setError('No contacts found on your device.')
+          setError('No contacts found on your device or contacts access failed. Please try manual entry.')
+          setInputMethod('manual')
           setLoading(false)
           setSyncStatus('idle')
           return
@@ -190,7 +191,12 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
   const handleStartSync = async () => {
     if (inputMethod === 'auto' && !permissionGranted) {
       const granted = await requestContactsPermissionMobile()
-      if (!granted) return
+      if (!granted) {
+        // If permission failed, automatically switch to manual mode
+        setInputMethod('manual')
+        setError('Contacts permission not available. Please enter phone numbers manually.')
+        return
+      }
     }
     
     await syncContacts()
@@ -409,11 +415,42 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
             )}
 
             {/* Mobile-specific message */}
-            {isMobile && !isContactsAPIAvailable() && (
+            {isMobile && !isContactsAPIAvailable() && inputMethod === 'auto' && (
               <div className="mobile-notice">
                 <div className="notice-icon">ℹ️</div>
-                <p><strong>Mobile Browser Detected</strong></p>
-                <p>Your mobile browser doesn't support automatic contact sync. Please use manual entry to find friends.</p>
+                <p><strong>Contact Sync Information</strong></p>
+                <p>If automatic contact sync doesn't work, please try:</p>
+                <ul style={{ textAlign: 'left', marginTop: '0.5rem' }}>
+                  <li>Enable contacts permission in device settings</li>
+                  <li>Restart the app and try again</li>
+                  <li>Use manual entry as an alternative</li>
+                </ul>
+              </div>
+            )}
+
+            {/* Error handling with helpful suggestions */}
+            {error && (
+              <div className="error-message-detailed">
+                <div className="error-icon">⚠️</div>
+                <h4>Sync Issue</h4>
+                <p>{error}</p>
+                <div className="error-suggestions">
+                  <p><strong>Try these solutions:</strong></p>
+                  <ul>
+                    <li>Check if contacts permission is enabled in device settings</li>
+                    <li>Restart the app and try again</li>
+                    <li>Use manual phone number entry below</li>
+                  </ul>
+                </div>
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setError('')
+                    setInputMethod('manual')
+                  }}
+                >
+                  Switch to Manual Entry
+                </button>
               </div>
             )}
             
@@ -479,7 +516,7 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
           </div>
         )}
 
-        {error && (
+        {error && syncStatus !== 'idle' && (
           <div className="error-message">
             <div className="error-icon">❌</div>
             <h4>Sync Failed</h4>
@@ -489,9 +526,10 @@ const ContactSync = ({ user, onBack, onUserSelect }) => {
               onClick={() => {
                 setError('')
                 setSyncStatus('idle')
+                setInputMethod('manual')
               }}
             >
-              Try Again
+              Try Manual Entry
             </button>
           </div>
         )}
