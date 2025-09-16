@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Message Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .sent { background-color: #e3f2fd; text-align: right; }
+        .received { background-color: #f3e5f5; text-align: left; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Real-time Message Test</h1>
+    
+    <div class="test-section info">
+        <h3>Connection Status</h3>
+        <p>Socket Status: <span id="socketStatus">Disconnected</span></p>
+        <p>Socket ID: <span id="socketId">-</span></p>
+        <button onclick="connectSocket()">Connect Socket</button>
+        <button onclick="disconnectSocket()">Disconnect Socket</button>
+    </div>
+
+    <div class="test-section">
+        <h3>Message Test</h3>
+        <input type="text" id="messageInput" placeholder="Enter message..." style="width: 70%; padding: 8px;">
+        <input type="text" id="receiverId" placeholder="Receiver ID" style="width: 20%; padding: 8px;">
+        <button onclick="sendMessage()">Send Message</button>
+        <button onclick="clearMessages()">Clear Messages</button>
+    </div>
+
+    <div class="test-section">
+        <h3>Messages</h3>
+        <div id="messages"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Results</h3>
+        <div id="testResults"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        let testResults = {
+            connection: false,
+            messageSent: false,
+            messageReceived: false
+        };
+
+        function connectSocket() {
+            if (socket) {
+                socket.disconnect();
+            }
+
+            // Use a test token (you'll need to replace this with a real token)
+            const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2NzhmYjQ4YzQ4YzQ4YzQ4YzQ4YzQ4YzQiLCJpYXQiOjE3MzQ5NjQ4MDAsImV4cCI6MTczNDk2ODQwMH0.test';
+            
+            socket = io('http://localhost:8000', {
+                auth: { token: testToken },
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                document.getElementById('socketStatus').textContent = 'Connected';
+                document.getElementById('socketId').textContent = socket.id;
+                testResults.connection = true;
+                updateTestResults();
+                addMessage('✅ Socket connected successfully', 'info');
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('socketStatus').textContent = 'Disconnected';
+                document.getElementById('socketId').textContent = '-';
+                testResults.connection = false;
+                updateTestResults();
+                addMessage('❌ Socket disconnected', 'error');
+            });
+
+            socket.on('connect_error', (error) => {
+                addMessage('❌ Connection error: ' + error.message, 'error');
+            });
+
+            socket.on('new-message', (data) => {
+                addMessage('📨 Received: ' + data.message.content, 'received');
+                testResults.messageReceived = true;
+                updateTestResults();
+            });
+
+            socket.on('message-sent', (data) => {
+                addMessage('📤 Sent confirmation: ' + data.message.content, 'sent');
+                testResults.messageSent = true;
+                updateTestResults();
+            });
+
+            socket.on('message-error', (error) => {
+                addMessage('❌ Message error: ' + error.error, 'error');
+            });
+        }
+
+        function disconnectSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const receiverId = document.getElementById('receiverId');
+            
+            if (!socket || !socket.connected) {
+                addMessage('❌ Socket not connected', 'error');
+                return;
+            }
+
+            if (!messageInput.value.trim()) {
+                addMessage('❌ Please enter a message', 'error');
+                return;
+            }
+
+            if (!receiverId.value.trim()) {
+                addMessage('❌ Please enter receiver ID', 'error');
+                return;
+            }
+
+            socket.emit('send-message', {
+                receiverId: receiverId.value.trim(),
+                content: messageInput.value.trim(),
+                messageType: 'text',
+                isGroupChat: false
+            });
+
+            addMessage('📤 Sending: ' + messageInput.value, 'sent');
+            messageInput.value = '';
+        }
+
+        function addMessage(text, type) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = new Date().toLocaleTimeString() + ' - ' + text;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        function updateTestResults() {
+            const resultsDiv = document.getElementById('testResults');
+            let html = '<h4>Test Results:</h4>';
+            html += '<p>✅ Connection: ' + (testResults.connection ? 'PASS' : 'FAIL') + '</p>';
+            html += '<p>✅ Message Sent: ' + (testResults.messageSent ? 'PASS' : 'FAIL') + '</p>';
+            html += '<p>✅ Message Received: ' + (testResults.messageReceived ? 'PASS' : 'FAIL') + '</p>';
+            
+            const passedTests = Object.values(testResults).filter(result => result).length;
+            const totalTests = Object.keys(testResults).length;
+            html += `<p><strong>Overall Score: ${passedTests}/${totalTests} tests passed</strong></p>`;
+            
+            if (passedTests === totalTests) {
+                html += '<p style="color: green;">🎉 All tests passed! Real-time messaging is working.</p>';
+            } else {
+                html += '<p style="color: orange;">⚠️ Some tests failed. Check the console for details.</p>';
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            addMessage('🔍 Real-time message test page loaded', 'info');
+            addMessage('📝 Instructions:', 'info');
+            addMessage('1. Click "Connect Socket" to establish connection', 'info');
+            addMessage('2. Enter a receiver ID (another user ID)', 'info');
+            addMessage('3. Type a message and click "Send Message"', 'info');
+            addMessage('4. Check if message appears in real-time', 'info');
+        };
+    </script>
+</body>
+</html>
