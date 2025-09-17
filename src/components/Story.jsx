@@ -393,16 +393,16 @@ const Story = ({ user, onBack }) => {
     }
   };
 
-  // Auto-advance story
-  useEffect(() => {
-    if (showStoryViewer && selectedUserStories) {
-      const timer = setTimeout(() => {
-        nextStory();
-      }, 5000); // 5 seconds per story
+  // Auto-advance story - DISABLED (manual control only)
+  // useEffect(() => {
+  //   if (showStoryViewer && selectedUserStories) {
+  //     const timer = setTimeout(() => {
+  //       nextStory();
+  //     }, 5000); // 5 seconds per story
 
-      return () => clearTimeout(timer);
-    }
-  }, [showStoryViewer, currentStoryIndex, selectedUserStories]);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [showStoryViewer, currentStoryIndex, selectedUserStories]);
 
   useEffect(() => {
     const loadStories = async () => {
@@ -605,7 +605,7 @@ const Story = ({ user, onBack }) => {
           ))}
         </div>
 
-        <div className="story-content" onClick={nextStory}>
+        <div className="story-content">
           {currentStory.mediaType === 'image' && currentStory.media && (
             <img 
               src={`${API_CONFIG.BASE_URL}${currentStory.media}`} 
@@ -755,8 +755,52 @@ const Story = ({ user, onBack }) => {
         )}
 
         <div className="story-navigation">
-          <div className="nav-area left" onClick={prevStory}></div>
-          <div className="nav-area right" onClick={nextStory}></div>
+          <div className="nav-area left" onClick={prevStory} title="Previous story"></div>
+          <div className="nav-area right" onClick={nextStory} title="Next story"></div>
+        </div>
+        
+        {/* Manual navigation buttons for better UX */}
+        <div className="story-manual-controls" style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          gap: '10px',
+          zIndex: 1000
+        }}>
+          {currentStoryIndex > 0 && (
+            <button 
+              onClick={prevStory}
+              style={{
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '20px',
+                padding: '8px 12px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              ← Previous
+            </button>
+          )}
+          {currentStoryIndex < selectedUserStories.stories.length - 1 && (
+            <button 
+              onClick={nextStory}
+              style={{
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '20px',
+                padding: '8px 12px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Next →
+            </button>
+          )}
         </div>
       </div>
     );

@@ -1,18 +1,33 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
+import { API_CONFIG } from '../config/mobileConfig';
 
 const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isUserInChat = true, isGroupChat = false }) => {
   const messagesEndRef = useRef(null);
   const { socket, isConnected } = useSocket();
+  
+  // State for message actions
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [longPressTimer, setLongPressTimer] = useState(null);
+  const [messagesState, setMessagesState] = useState(messages || []);
+  const [longPressMessage, setLongPressMessage] = useState(null); // Track which message is being long-pressed
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Update messages state when props change
+  useEffect(() => {
+    setMessagesState(messages || []);
+  }, [messages]);
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messagesState]);
 
   // Listen for new messages
   useEffect(() => {
@@ -47,15 +62,191 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
         console.log('Message read:', data);
       };
 
+      const handleMessageDeleted = (data) => {
+        console.log('Message deleted:', data);
+        const { messageId, deletedMessage } = data;
+        
+        setMessagesState(prev => prev.map(msg => {
+          if ((msg._id || msg.id) === messageId) {
+            return {
+              ...msg,
+              ...deletedMessage,
+              isDeleted: true,
+              content: "This message was deleted",
+              messageType: "deleted"
+            };
+          }
+          return msg;
+        }));
+      };
+
+      const handleReactionAdded = (data) => {
+        console.log('Reaction added:', data);
+        const { messageId, reactions } = data;
+        
+        setMessagesState(prev => prev.map(msg => {
+          if ((msg._id || msg.id) === messageId) {
+            return {
+              ...msg,
+              reactions: reactions || []
+            };
+          }
+          return msg;
+        }));
+      };
+
+      const handleReactionRemoved = (data) => {
+        console.log('Reaction removed:', data);
+        const { messageId, reactions } = data;
+        
+        setMessagesState(prev => prev.map(msg => {
+          if ((msg._id || msg.id) === messageId) {
+            return {
+              ...msg,
+              reactions: reactions || []
+            };
+          }
+          return msg;
+        }));
+      };
+
       socket.on('new-message', handleNewMessage);
       socket.on('message-read', handleMessageRead);
+      socket.on('message-deleted', handleMessageDeleted);
+      socket.on('reaction-added', handleReactionAdded);
+      socket.on('reaction-removed', handleReactionRemoved);
 
       return () => {
         socket.off('new-message', handleNewMessage);
         socket.off('message-read', handleMessageRead);
+        socket.off('message-deleted', handleMessageDeleted);
+        socket.off('reaction-added', handleReactionAdded);
+        socket.off('reaction-removed', handleReactionRemoved);
       };
     }
   }, [socket, isConnected, currentUserId, receiver?.id, onMessageReceived]);
+
+  // Long press handlers
+  const handleLongPressStart = (message, event) => {
+    // Immediately highlight the message being pressed
+    setLongPressMessage(message);
+    
+    const timer = setTimeout(() => {
+      // Add haptic feedback for mobile devices
+      if (navigator.vibrate) {
+        navigator.vibrate(50); // Short vibration
+      }
+      
+      const rect = event.target.getBoundingClientRect();
+      setContextMenuPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.top - 10
+      });
+      setSelectedMessage(message);
+      setShowContextMenu(true);
+      setLongPressMessage(null); // Remove highlight when context menu appears
+    }, 1500); // 1.5 seconds for long press (like WhatsApp)
+    
+    setLongPressTimer(timer);
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    // Remove highlight if long press was cancelled
+    setLongPressMessage(null);
+  };
+
+  // Close context menu
+  const closeContextMenu = () => {
+    setShowContextMenu(false);
+    setSelectedMessage(null);
+    setLongPressMessage(null);
+  };
+
+  // Reaction handlers
+  const handleAddReaction = async (messageId, reaction = "👍") => {
+    if (!socket || !isConnected) return;
+    
+    try {
+      socket.emit('add-reaction', {
+        messageId: messageId,
+        reaction: reaction
+      });
+    } catch (error) {
+      console.error('Failed to add reaction:', error);
+    }
+  };
+
+  const handleRemoveReaction = async (messageId) => {
+    if (!socket || !isConnected) return;
+    
+    try {
+      socket.emit('remove-reaction', {
+        messageId: messageId
+      });
+    } catch (error) {
+      console.error('Failed to remove reaction:', error);
+    }
+  };
+
+  // Delete message handler
+  const handleDeleteMessage = async () => {
+    if (!selectedMessage || !socket || !isConnected) return;
+    
+    const messageId = selectedMessage._id || selectedMessage.id;
+    
+    // Check if this is a temporary message
+    if (messageId && messageId.toString().startsWith('temp-')) {
+      console.log('🗑️ Frontend: Attempting to delete temporary message, removing locally:', messageId);
+      // Remove temporary message locally
+      setMessagesState(prev => prev.filter(msg => 
+        (msg._id || msg.id) !== messageId
+      ));
+      closeContextMenu();
+      setShowDeleteModal(false);
+      return;
+    }
+    
+    console.log('🗑️ Frontend: Attempting to delete message:', {
+      messageId,
+      selectedMessage,
+      currentUserId,
+      messageSenderId: selectedMessage.sender?._id || selectedMessage.sender?.id,
+      isOwnMessage: (selectedMessage.sender?._id === currentUserId || selectedMessage.sender?.id === currentUserId),
+      isTemporary: selectedMessage.isTemporary
+    });
+    
+    try {
+      socket.emit('delete-message', {
+        messageId: messageId
+      });
+      
+      closeContextMenu();
+      setShowDeleteModal(false);
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+    }
+  };
+
+  // Handle context menu actions
+  const handleContextMenuAction = (action, reaction = "👍") => {
+    const messageId = selectedMessage._id || selectedMessage.id;
+    
+    switch (action) {
+      case 'like':
+        handleAddReaction(messageId, reaction);
+        closeContextMenu();
+        break;
+      case 'delete':
+        setShowDeleteModal(true);
+        break;
+      default:
+        closeContextMenu();
+    }
+  };
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -207,10 +398,14 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
     const senderId = message.sender?._id || message.sender?.id;
     const isOwnMessage = senderId === currentUserId;
     const messageTime = formatTime(message.timestamp);
+    const messageId = message._id || message.id;
+    const userReaction = message.reactions?.find(r => r.user?._id === currentUserId || r.user?.id === currentUserId);
+    const isDeleted = message.isDeleted || message.messageType === 'deleted';
+    const isLongPressed = longPressMessage && (longPressMessage._id || longPressMessage.id) === messageId;
 
     return (
       <div
-        key={message._id || message.id}
+        key={messageId}
         className={`message ${isOwnMessage ? 'own-message' : 'other-message'}`}
         style={{
           display: 'flex',
@@ -226,14 +421,31 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
             maxWidth: '70%',
             padding: '6px 7px 8px 9px',
             borderRadius: isOwnMessage ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-            backgroundColor: isOwnMessage ? '#DCF8C6' : '#FFFFFF',
-            border: 'none',
+            backgroundColor: isLongPressed 
+              ? (isOwnMessage ? '#B8E6B8' : '#E8E8E8') // Darker shade when long-pressed
+              : isDeleted 
+                ? '#F0F0F0' 
+                : (isOwnMessage ? '#DCF8C6' : '#FFFFFF'),
+            border: isLongPressed 
+              ? '2px solid #25D366' // Green border when selected
+              : 'none',
             position: 'relative',
             wordWrap: 'break-word',
             fontSize: '14px',
             lineHeight: '19px',
-            boxShadow: '0 1px 0.5px rgba(0, 0, 0, 0.13)',
+            boxShadow: isLongPressed 
+              ? '0 4px 12px rgba(37, 211, 102, 0.3)' // Enhanced shadow when selected
+              : '0 1px 0.5px rgba(0, 0, 0, 0.13)',
+            opacity: isDeleted ? 0.7 : 1,
+            transform: isLongPressed ? 'scale(1.02)' : 'scale(1)', // Slight scale up when selected
+            transition: 'all 0.2s ease-in-out', // Smooth transition
+            marginBottom: message.reactions && message.reactions.length > 0 ? '14px' : '0', // More space for lower reactions
           }}
+          onTouchStart={(e) => !isDeleted && handleLongPressStart(message, e)}
+          onTouchEnd={handleLongPressEnd}
+          onMouseDown={(e) => !isDeleted && handleLongPressStart(message, e)}
+          onMouseUp={handleLongPressEnd}
+          onMouseLeave={handleLongPressEnd}
         >
           {!isOwnMessage && isGroupChat && (
             <div
@@ -250,16 +462,19 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
           )}
           
           {/* Render file attachment if present */}
-          {message.attachment && renderFileAttachment(message.attachment, message.messageType)}
+          {!isDeleted && message.attachment && renderFileAttachment(message.attachment, message.messageType)}
           
           {/* Render text content if present */}
           {message.content && (
-            <div className="message-content">
-              {message.content}
+            <div className="message-content" style={{
+              fontStyle: isDeleted ? 'italic' : 'normal',
+              color: isDeleted ? '#666' : 'inherit'
+            }}>
+              {isDeleted && '🚫 '}{message.content}
             </div>
           )}
           
-          {/* Time inside bubble for all messages */}
+          {/* Time and read status */}
           <div
             className="message-time"
             style={{
@@ -274,7 +489,7 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
             }}
           >
             <span style={{ flexShrink: 0 }}>{messageTime}</span>
-            {isOwnMessage && (
+            {isOwnMessage && !isDeleted && (
               <span
                 style={{
                   display: 'inline-flex',
@@ -320,19 +535,84 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
               </span>
             )}
           </div>
+
+          {/* Reactions display - Overlapping bubble */}
+          {message.reactions && message.reactions.length > 0 && (
+            <div style={{
+              position: 'absolute',
+              bottom: '-12px', // More outside the bubble, lower from time
+              [isOwnMessage ? 'right' : 'left']: '8px', // Position based on message alignment
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '4px',
+              zIndex: 10, // Ensure reactions appear above other elements
+            }}>
+              {message.reactions.reduce((acc, reaction) => {
+                const existingReaction = acc.find(r => r.reaction === reaction.reaction);
+                if (existingReaction) {
+                  existingReaction.count++;
+                  existingReaction.users.push(reaction.user);
+                } else {
+                  acc.push({
+                    reaction: reaction.reaction,
+                    count: 1,
+                    users: [reaction.user]
+                  });
+                }
+                return acc;
+              }, []).map((reactionGroup, index) => (
+                <span
+                  key={index}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '12px',
+                    padding: '2px 6px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    border: userReaction?.reaction === reactionGroup.reaction 
+                      ? '' 
+                      : '1px solid rgba(0, 0, 0, 0.2)',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
+                    transition: 'all 0.2s ease',
+                    minHeight: '23px',
+                  }}
+                  onClick={() => {
+                    if (userReaction?.reaction === reactionGroup.reaction) {
+                      handleRemoveReaction(messageId);
+                    } else {
+                      handleAddReaction(messageId, reactionGroup.reaction);
+                    }
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'scale(1.1)';
+                    e.target.style.boxShadow = '0 3px 6px rgba(0, 0, 0, 0.2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'scale(1)';
+                    e.target.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
+                  }}
+                  title={`${reactionGroup.users.map(u => u.name).join(', ')}`}
+                >
+                  {reactionGroup.reaction} {reactionGroup.count > 1 && reactionGroup.count}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
   };
 
   // Filter out empty messages and debug
-  const validMessages = messages?.filter(msg => 
+  const validMessages = messagesState?.filter(msg => 
     msg && (msg.content || msg.attachment) && (msg.content?.trim() || msg.attachment)
   ) || [];
   
   console.log('📨 MessageList - Messages array:', {
-    originalMessages: messages,
-    originalLength: messages?.length,
+    originalMessages: messagesState,
+    originalLength: messagesState?.length,
     validMessages: validMessages,
     validLength: validMessages.length,
     hasValidMessages: validMessages.length > 0,
@@ -371,23 +651,264 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
   }
 
   return (
-    <div 
-      className="message-list" 
-      style={{ 
-        height: '100%', 
-        overflow: 'auto',
-        scrollbarWidth: 'none', /* Firefox */
-        msOverflowStyle: 'none', /* Internet Explorer 10+ */
-      }}
-    >
-      <style jsx>{`
-        .message-list::-webkit-scrollbar {
-          display: none; /* Safari and Chrome */
-        }
-      `}</style>
-      {validMessages.map(renderMessage)}
-      <div ref={messagesEndRef} />
-    </div>
+    <>
+      <div 
+        className="message-list" 
+        style={{ 
+          height: '90%', 
+          overflow: 'auto',
+          scrollbarWidth: 'none', /* Firefox */
+          msOverflowStyle: 'none', /* Internet Explorer 10+ */
+        }}
+      >
+        <style jsx>{`
+          .message-list::-webkit-scrollbar {
+            display: none; /* Safari and Chrome */
+          }
+        `}</style>
+        {validMessages.map(renderMessage)}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* WhatsApp-style context menu */}
+      {showContextMenu && selectedMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999,
+          }}
+          onClick={closeContextMenu}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: contextMenuPosition.y,
+              left: Math.max(10, Math.min(contextMenuPosition.x - 100, window.innerWidth - 210)),
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '8px',
+              minWidth: '200px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              border: '1px solid #e0e0e0',
+              animation: 'contextMenuSlideIn 0.2s ease-out',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <style jsx>{`
+              @keyframes contextMenuSlideIn {
+                from {
+                  opacity: 0;
+                  transform: translateY(-10px) scale(0.95);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0) scale(1);
+                }
+              }
+            `}</style>
+
+            {/* Reaction options */}
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                color: '#666', 
+                padding: '8px 12px 4px', 
+                fontWeight: '500' 
+              }}>
+                React
+              </div>
+              <div style={{ 
+                display: 'flex', 
+                gap: '8px', 
+                padding: '4px 12px 8px',
+                borderBottom: '1px solid #f0f0f0'
+              }}>
+                {['👍', '❤️', '😂', '😮', '😢', '😡'].map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleContextMenuAction('like', emoji)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: '24px',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      borderRadius: '8px',
+                      transition: 'background-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action options */}
+            <div>
+              {(() => {
+                const senderId = selectedMessage?.sender?._id || selectedMessage?.sender?.id;
+                const messageId = selectedMessage?._id || selectedMessage?.id;
+                const isOwnMessage = senderId === currentUserId || senderId?.toString() === currentUserId?.toString();
+                const isTemporary = selectedMessage?.isTemporary || messageId?.toString().startsWith('temp-');
+                const isDeleted = selectedMessage?.isDeleted || selectedMessage?.messageType === 'deleted';
+                
+                console.log('🔍 Delete button condition check:', {
+                  selectedMessage,
+                  currentUserId,
+                  senderId,
+                  isOwnMessage,
+                  isTemporary,
+                  isDeleted,
+                  messageId,
+                  showDelete: isOwnMessage && !isTemporary && !isDeleted
+                });
+                
+                return isOwnMessage && !isTemporary && !isDeleted;
+              })() && (
+                <button
+                  onClick={() => handleContextMenuAction('delete')}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: '#ff4757',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    textAlign: 'left',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#fff5f5'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                >
+                  🗑️ Delete Message
+                </button>
+              )}
+              
+              {/* Debug: Always show delete button to test */}
+              {!(() => {
+                const senderId = selectedMessage?.sender?._id || selectedMessage?.sender?.id;
+                const messageId = selectedMessage?._id || selectedMessage?.id;
+                const isOwnMessage = senderId === currentUserId || senderId?.toString() === currentUserId?.toString();
+                const isTemporary = selectedMessage?.isTemporary || messageId?.toString().startsWith('temp-');
+                const isDeleted = selectedMessage?.isDeleted || selectedMessage?.messageType === 'deleted';
+                return isOwnMessage && !isTemporary && !isDeleted;
+              })() && selectedMessage && (
+                <button
+                  onClick={() => handleContextMenuAction('delete')}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: '#ff9999',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    textAlign: 'left',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#fff5f5'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                >
+                  🗑️ Debug Delete (Not Own Message)
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteModal && selectedMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => {
+            setShowDeleteModal(false);
+            closeContextMenu();
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '20px',
+              maxWidth: '300px',
+              width: '90%',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
+              Delete Message
+            </h3>
+            <p style={{ margin: '0 0 20px 0', color: '#666', fontSize: '14px' }}>
+              Are you sure you want to delete this message? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  closeContextMenu();
+                }}
+                style={{
+                  padding: '10px 20px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  backgroundColor: 'white',
+                  color: '#666',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteMessage}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#ff4757',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

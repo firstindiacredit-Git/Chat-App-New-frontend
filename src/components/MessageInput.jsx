@@ -302,69 +302,35 @@ const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUser
   }, [typingTimeout]);
 
   return (
-    <div className="message-input-container">
+    <div className="bg-transparent border border-gray-400 rounded-full relative">
       {/* File Preview */}
       {selectedFile && (
-        <div style={{
-          padding: '8px 16px',
-          borderBottom: '1px solid #E0E0E0',
-          backgroundColor: '#F5F5F5',
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: 'white',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            border: '1px solid #E0E0E0',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+        <div className="px-2 py-1 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center flex-1">
               {previewUrl ? (
                 <img
                   src={previewUrl}
                   alt="Preview"
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    objectFit: 'cover',
-                    borderRadius: '4px',
-                    marginRight: '12px',
-                  }}
+                  className="w-10 h-10 object-cover rounded mr-3"
                 />
               ) : (
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  backgroundColor: '#E0E0E0',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: '12px',
-                }}>
+                <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center mr-3 text-lg">
                   📎
                 </div>
               )}
-              <div>
-                <div style={{ fontSize: '14px', fontWeight: '500', color: '#333' }}>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-900 truncate">
                   {selectedFile.name}
                 </div>
-                <div style={{ fontSize: '12px', color: '#666' }}>
+                <div className="text-xs text-gray-500">
                   {formatFileSize(selectedFile.size)}
                 </div>
               </div>
             </div>
             <button
               onClick={removeSelectedFile}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#666',
-                cursor: 'pointer',
-                padding: '4px',
-                borderRadius: '4px',
-              }}
+              className="ml-3 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
             >
               ✕
             </button>
@@ -373,111 +339,85 @@ const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUser
       )}
 
       <div 
-        className="message-input-wrapper"
+        className={`px-4 py-3 transition-all duration-200 ${
+          dragOver ? 'border-2 border-dashed border-green-500 rounded-lg bg-green-50' : ''
+        }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        style={{
-          border: dragOver ? '2px dashed #25D366' : 'none',
-          borderRadius: dragOver ? '8px' : '0',
-          backgroundColor: 'transparent',
-        }}
       >
-        <div className="message-input-field" style={{ 
-          display: 'flex', 
-          alignItems: 'center',
-          width: '100%',
-          gap: '8px'
-        }}>
+        <div className="flex items-end gap-3 max-w-full">
           {/* File Upload Button */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#666',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              padding: '8px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
+            className={`
+              p-2 rounded-full transition-all duration-200 flex-shrink-0
+              ${disabled 
+                ? 'text-gray-300 cursor-not-allowed' 
+                : 'text-gray-500 hover:text-green-600 hover:bg-gray-100 cursor-pointer'
+              }
+            `}
             title="Attach file"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
             </svg>
           </button>
 
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={handleInputChange}
-            onKeyPress={handleKeyPress}
-            onBlur={handleInputBlur}
-            placeholder={"Type a message..."}
-            disabled={disabled}
-            rows={1}
-            style={{
-              resize: 'none',
-              minHeight: '44px',
-              maxHeight: '120px',
-              overflow: 'auto',
-              border: 'none',
-              outline: 'none',
-              backgroundColor: 'transparent',
-              flex: 1,
-              width: '100%',
-              fontSize: '14px',
-              lineHeight: '20px',
-              padding: '12px 0',
-              fontFamily: 'inherit',
-            }}
-          />
+          {/* Message Input Container */}
+          <div className="flex-1 relative">
+            <div className="bg-gray-100 rounded-3xl px-4 py-2 min-h-[44px] flex items-center border border-gray-200 focus-within:border-green-500 focus-within:ring-1 focus-within:ring-green-500 transition-all duration-200">
+              <textarea
+                ref={textareaRef}
+                value={message}
+                onChange={handleInputChange}
+                onKeyPress={handleKeyPress}
+                onBlur={handleInputBlur}
+                placeholder="Type a message..."
+                disabled={disabled}
+                rows={1}
+                className={`
+                  w-full resize-none border-none outline-none bg-transparent
+                  text-gray-900 placeholder-gray-500 text-sm leading-5
+                  min-h-[20px] max-h-[100px] overflow-auto
+                  ${disabled ? 'cursor-not-allowed text-gray-400' : ''}
+                `}
+                style={{
+                  fontFamily: 'inherit',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Send Button */}
+          <button
+            onClick={handleSendMessage}
+            disabled={(!message.trim() && !selectedFile) || !receiverId || disabled || isUploading}
+            className={`
+              w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0
+              ${(message.trim() || selectedFile) && receiverId && !disabled && !isUploading
+                ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer shadow-lg hover:shadow-xl transform hover:scale-105' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }
+            `}
+            title="Send message"
+          >
+            {isUploading ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="transform rotate-0"
+              >
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+              </svg>
+            )}
+          </button>
         </div>
-        
-        <button
-          onClick={handleSendMessage}
-          disabled={(!message.trim() && !selectedFile) || !receiverId || disabled || isUploading}
-          className="send-button"
-          style={{
-            backgroundColor: (message.trim() || selectedFile) && receiverId && !disabled && !isUploading ? '#25D366' : '#E0E0E0',
-            color: (message.trim() || selectedFile) && receiverId && !disabled && !isUploading ? 'white' : '#9E9E9E',
-            border: 'none',
-            borderRadius: '50%',
-            width: '44px',
-            height: '44px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: (message.trim() || selectedFile) && receiverId && !disabled && !isUploading ? 'pointer' : 'not-allowed',
-            transition: 'all 0.2s ease',
-            flexShrink: 0,
-          }}
-        >
-          {isUploading ? (
-            <div style={{
-              width: '16px',
-              height: '16px',
-              border: '2px solid #ffffff',
-              borderTop: '2px solid transparent',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-            }} />
-          ) : (
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
-          )}
-        </button>
       </div>
 
       {/* Hidden file input */}
@@ -485,38 +425,16 @@ const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUser
         ref={fileInputRef}
         type="file"
         onChange={handleFileInputChange}
-        style={{ display: 'none' }}
+        className="hidden"
         accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z"
       />
 
       {/* Drag overlay */}
       {dragOver && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(37, 211, 102, 0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '16px',
-          color: '#25D366',
-          fontWeight: '500',
-          pointerEvents: 'none',
-          zIndex: 10,
-        }}>
-          Drop file here to attach
+        <div className="absolute inset-0 bg-green-50 flex items-center justify-center text-green-600 font-medium text-base pointer-events-none z-10 rounded-lg border-2 border-dashed border-green-500">
+          📎 Drop file here to attach
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 };

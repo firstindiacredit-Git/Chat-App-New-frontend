@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { API_CONFIG } from '../config/mobileConfig'
 import { Link } from 'react-router-dom'
+import Header from './Header'
 import AvatarUpload from './AvatarUpload'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
@@ -928,16 +929,13 @@ const Chat = ({ user, onLogout }) => {
   if (showProfile) {
     return (
       <div className="chat-container">
-        <div className="chat-header">
-          <button 
-            className="back-btn"
-            onClick={() => setShowProfile(false)}
-          >
-            ←
-          </button>
-          <h3>Profile</h3>
-          <div style={{ width: '40px' }}></div>
-        </div>
+        <Header 
+          user={currentUser}
+          title="Profile"
+          showBackButton={true}
+          onBackClick={() => setShowProfile(false)}
+          showActions={false}
+        />
         
         <div className="profile-content">
           <div className="profile-avatar" style={{ position: 'relative' }}>
@@ -1001,16 +999,13 @@ const Chat = ({ user, onLogout }) => {
   if (showAvatarUpload) {
     return (
       <div className="chat-container">
-        <div className="chat-header">
-          <button 
-            className="back-btn"
-            onClick={() => setShowAvatarUpload(false)}
-          >
-            ←
-          </button>
-          <h3>Update Avatar</h3>
-          <div style={{ width: '40px' }}></div>
-        </div>
+        <Header 
+          user={currentUser}
+          title="Update Avatar"
+          showBackButton={true}
+          onBackClick={() => setShowAvatarUpload(false)}
+          showActions={false}
+        />
         
         <div style={{ flex: 1, overflowY: 'auto', backgroundColor: 'white' }}>
           <AvatarUpload 
@@ -1053,42 +1048,39 @@ const Chat = ({ user, onLogout }) => {
   // Show call history
   if (showCallHistory) {
     return (
-      <CallHistory
-        user={currentUser}
-        onBack={() => setShowCallHistory(false)}
-      />
+      <div className="chat-container">
+        <Header 
+          user={currentUser}
+          title="Call History"
+          showBackButton={true}
+          onBackClick={() => setShowCallHistory(false)}
+          showActions={false}
+        />
+        <CallHistory
+          user={currentUser}
+          onBack={() => setShowCallHistory(false)}
+        />
+      </div>
     )
   }
 
   // Show full-screen tab content for non-chat tabs
   if (activeTab === 'stories' || activeTab === 'groups' || activeTab === 'calls') {
+    const getTabTitle = () => {
+      if (activeTab === 'stories') return 'Stories';
+      if (activeTab === 'groups') return 'Groups';
+      if (activeTab === 'calls') return 'Calls';
+      return 'Tab';
+    };
+
     return (
       <div className="fullscreen-tab-container">
-        <div className="chat-header">
-          <div className="chat-header-info-right">
-            <div>
-              <h3>
-                {activeTab === 'stories' && 'Stories'}
-                {activeTab === 'groups' && 'Groups'}
-                {activeTab === 'calls' && 'Calls'}
-              </h3>
-              <span className="online">
-                {activeTab === 'stories' && 'Share your moments'}
-                {activeTab === 'groups' && 'Group conversations'}
-                {activeTab === 'calls' && 'Call history'}
-              </span>
-            </div>
-            <div className="chat-avatar">
-              {currentUser.avatar ? (
-                <img src={currentUser.avatar} alt={currentUser.name || 'User'} />
-              ) : (
-                <div className="default-avatar">
-                  {currentUser.name?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <Header 
+          user={currentUser}
+          title={getTabTitle()}
+          showActions={true}
+          onProfileClick={() => setShowProfile(true)}
+        />
         
         <div className="fullscreen-tab-content">
           {activeTab === 'stories' && (
@@ -1163,16 +1155,13 @@ const Chat = ({ user, onLogout }) => {
   if (showGroupDetails && selectedGroup) {
     return (
       <div className="chat-container">
-        <div className="chat-header">
-          <button 
-            className="back-btn"
-            onClick={() => setShowGroupDetails(false)}
-          >
-            ←
-          </button>
-          <h3>Group Info</h3>
-          <div style={{ width: '40px' }}></div>
-        </div>
+        <Header 
+          user={currentUser}
+          title="Group Info"
+          showBackButton={true}
+          onBackClick={() => setShowGroupDetails(false)}
+          showActions={false}
+        />
         
         <div className="group-details-content">
           <div className="group-info">
@@ -1336,19 +1325,16 @@ const Chat = ({ user, onLogout }) => {
   if (showAddMembers && selectedGroup) {
     return (
       <div className="chat-container">
-        <div className="chat-header">
-          <button 
-            className="back-btn"
-            onClick={() => {
-              setShowAddMembers(false)
-              setSelectedUsersToAdd([])
-            }}
-          >
-            ←
-          </button>
-          <h3>Add Members</h3>
-          <div style={{ width: '40px' }}></div>
-        </div>
+        <Header 
+          user={currentUser}
+          title="Add Members"
+          showBackButton={true}
+          onBackClick={() => {
+            setShowAddMembers(false)
+            setSelectedUsersToAdd([])
+          }}
+          showActions={false}
+        />
         
         <div className="group-details-content">
           <div className="form-group">
@@ -1421,47 +1407,21 @@ const Chat = ({ user, onLogout }) => {
   // Show group chat if group is selected
   if (selectedGroup && selectedGroup._id) {
     return (
-      <div className="chat-container">
-        <div className="chat-header">
-          <button 
-            className="back-btn"
-            onClick={() => setSelectedGroup(null)}
-          >
-            ←
-          </button>
-          <div className="chat-header-info">
-            {selectedGroup.avatar ? (
-              <img src={selectedGroup.avatar} alt={selectedGroup.name || 'Group'} />
-            ) : (
-              <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                backgroundColor: '#25D366',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px',
-                fontWeight: '600'
-              }}>
-                {selectedGroup.name ? selectedGroup.name.charAt(0).toUpperCase() : 'G'}
-              </div>
-            )}
-            <div>
-              <h3 
-                className="group-name-clickable"
-                onClick={() => setShowGroupDetails(true)}
-                title="Click to view group details"
-              >
-                {selectedGroup.name || 'Group'}
-              </h3>
-              <span className="online">
-                {selectedGroup.members?.length || 0} members
-              </span>
-            </div>
-          </div>
-        </div>
+      <div className="chat-room-container">
+        <Header 
+          user={currentUser}
+          title={selectedGroup.name || 'Group'}
+          showBackButton={true}
+          onBackClick={() => setSelectedGroup(null)}
+          showActions={true}
+          receiver={{
+            name: selectedGroup.name,
+            avatar: selectedGroup.avatar,
+            id: selectedGroup._id
+          }}
+          isReceiverOnline={false} // Groups don't have online status
+          showCallButtons={false} // No calls for groups
+        />
         
         <div className="messages-container">
           <MessageList 
@@ -1492,57 +1452,52 @@ const Chat = ({ user, onLogout }) => {
   if (selectedChat && selectedChat.id) {
     const chat = chats.find(c => c.id === selectedChat.id) || selectedChat
     
+    console.log('🔍 Chat component - chat data for header:', {
+      chat,
+      chatAvatar: chat?.avatar,
+      chatName: chat?.name,
+      chatId: chat?.id,
+      isOnline: isUserOnline(chat?.id)
+    });
+    
     return (
-      <div className="chat-container">
-        <div className="chat-header">
-          <button 
-            className="back-btn"
-            onClick={() => setSelectedChat(null)}
-          >
-            ←
-          </button>
-          <div className="chat-header-info">
-            {chat && chat.avatar ? (
-              <img src={chat.avatar} alt={chat.name || 'User'} />
-            ) : (
-              <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                backgroundColor: '#25D366',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px',
-                fontWeight: '600'
-              }}>
-                {chat && chat.name ? chat.name.charAt(0).toUpperCase() : 'U'}
-              </div>
-            )}
-            <div>
-              <h3>{chat && chat.name ? chat.name : 'User'}</h3>
-              <span className={chat && chat.online ? 'online' : 'offline'}>
-                {chat && chat.online ? 'online' : 'last seen recently'}
-              </span>
-            </div>
-          </div>
-          
-          <div className="chat-header-actions">
-            <CallButton
-              user={currentUser}
-              otherUser={{ _id: chat.id, name: chat.name, avatar: chat.avatar }}
-              callType="voice"
-              onCallInitiated={handleCallInitiated}
-            />
-            <CallButton
-              user={currentUser}
-              otherUser={{ _id: chat.id, name: chat.name, avatar: chat.avatar }}
-              callType="video"
-              onCallInitiated={handleCallInitiated}
-            />
-          </div>
-        </div>
+      <div className="chat-room-container">
+        <Header 
+          user={currentUser}
+          title={chat && chat.name ? chat.name : 'User'}
+          showBackButton={true}
+          onBackClick={() => setSelectedChat(null)}
+          showActions={true}
+          receiver={chat}
+          isReceiverOnline={isUserOnline(chat.id)}
+          showCallButtons={true}
+          onVoiceCall={() => {
+            if (!socket || !isConnected) {
+              alert('Not connected to server');
+              return;
+            }
+            
+            console.log('📞 Initiating voice call to:', chat.name);
+            // Emit call initiation through socket (same as CallButton)
+            socket.emit('call-initiate', {
+              receiverId: chat.id,
+              callType: 'voice',
+            });
+          }}
+          onVideoCall={() => {
+            if (!socket || !isConnected) {
+              alert('Not connected to server');
+              return;
+            }
+            
+            console.log('📹 Initiating video call to:', chat.name);
+            // Emit call initiation through socket (same as CallButton)
+            socket.emit('call-initiate', {
+              receiverId: chat.id,
+              callType: 'video',
+            });
+          }}
+        />
         
         <div className="messages-container">
           <MessageList 
@@ -1569,11 +1524,20 @@ const Chat = ({ user, onLogout }) => {
 
   return (
     <div className="chat-container">
+      {/* Fixed Header */}
+      <Header 
+        user={currentUser}
+        isConnected={isConnected}
+        totalUnreadCount={chats.reduce((sum, chat) => sum + (chat.unread || 0), 0)}
+        onProfileClick={() => setShowProfile(true)}
+        title="Chats"
+      />
+
       {/* Notifications */}
       {notifications.length > 0 && (
         <div style={{
           position: 'fixed',
-          top: '70px',
+          top: '100px', /* Adjusted for fixed header */
           right: '20px',
           zIndex: 1000,
           maxWidth: '300px'
@@ -1597,86 +1561,6 @@ const Chat = ({ user, onLogout }) => {
           ))}
         </div>
       )}
-      
-      <div className="chat-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <h3>Chats</h3>
-          <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            backgroundColor: isConnected ? '#25D366' : '#ff4444',
-            animation: isConnected ? 'pulse 2s infinite' : 'none'
-          }} title={isConnected ? 'Connected' : 'Disconnected'}></div>
-          {(() => {
-            const totalUnread = chats.reduce((sum, chat) => sum + (chat.unread || 0), 0);
-            return totalUnread > 0 ? (
-              <span 
-                className="unread-badge" 
-                style={{ 
-                  fontSize: '0.7rem', 
-                  padding: '0.2rem 0.4rem',
-                  backgroundColor: '#ff4444',
-                  marginLeft: '0.5rem'
-                }}
-                title={`${totalUnread} total unread messages`}
-              >
-                {totalUnread > 99 ? '99+' : totalUnread}
-              </span>
-            ) : null;
-          })()}
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Link 
-            to="/users" 
-            className="profile-btn"
-            style={{ 
-              textDecoration: 'none', 
-              color: 'white',
-              fontSize: '1.2rem',
-              padding: '0.5rem',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: '40px',
-              height: '40px',
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              transition: 'background-color 0.3s ease'
-            }}
-            title="View Users"
-          >
-            👥
-          </Link>
-          <button 
-            className="profile-btn"
-            onClick={() => setShowProfile(true)}
-          >
-            {currentUser.avatar ? (
-              <img 
-                src={currentUser.avatar}
-                alt="Profile"
-                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
-              />
-            ) : (
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                backgroundColor: '#25D366',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '14px',
-                fontWeight: '600'
-              }}>
-                {currentUser.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-            )}
-          </button>
-        </div>
-      </div>
       
       <div className="chats-list">
         {chats.map(chat => (
@@ -1749,7 +1633,7 @@ const Chat = ({ user, onLogout }) => {
           onClick={() => setActiveTab('chats')}
         >
           <span className="tab-icon">💬</span>
-          <span className="tab-label">Chats</span>
+          <span className="tab-label">Chat</span>
           {(() => {
             const totalUnread = chats.reduce((sum, chat) => sum + (chat.unread || 0), 0);
             return totalUnread > 0 ? (
@@ -1790,7 +1674,7 @@ const Chat = ({ user, onLogout }) => {
       </div>
 
       {/* Tab Content */}
-      <div className="tab-content">
+      <div className={`tab-content ${activeTab !== 'chats' ? 'active' : ''}`}>
         {activeTab === 'stories' && (
           <Story 
             user={currentUser} 
