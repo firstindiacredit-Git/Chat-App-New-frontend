@@ -764,14 +764,7 @@ const NewsFeed = ({ user, onBack }) => {
     </div>
   )
 
-  if (isMobilePlatform()) {
-    return (
-      <MobileLayout title="News Feed" onBack={onBack}>
-        {content}
-      </MobileLayout>
-    )
-  }
-
+  // Always return content without MobileLayout wrapper to avoid duplicate headers
   return content
 }
 

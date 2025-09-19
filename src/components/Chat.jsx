@@ -16,6 +16,7 @@ import NewsFeed from './NewsFeed'
 import { useSocket } from '../contexts/SocketContext'
 import { isMobilePlatform } from '../utils/mobilePermissions'
 import { AiOutlineSearch } from "react-icons/ai";
+import notificationService from '../services/notificationService';
 
 const Chat = ({ user, onLogout }) => {
   const { socket, isConnected, isUserOnline } = useSocket()
@@ -61,7 +62,8 @@ const Chat = ({ user, onLogout }) => {
   const messagesEndRef = useRef(null)
 
   // Show notification for new message
-  const showNotification = (senderName, messageContent) => {
+  const showNotification = (senderName, messageContent, chatId = null) => {
+    // In-app notification
     const notification = {
       id: Date.now(),
       message: `New message from ${senderName}: ${messageContent}`,
@@ -74,6 +76,20 @@ const Chat = ({ user, onLogout }) => {
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== notification.id));
     }, 5000);
+
+    // Native notification (only when app is in background)
+    if (notificationService.isEnabled()) {
+      // Limit message length for notification
+      const truncatedMessage = messageContent.length > 50 
+        ? messageContent.substring(0, 50) + '...' 
+        : messageContent;
+        
+      notificationService.showMessageNotification(
+        senderName,
+        truncatedMessage,
+        chatId
+      );
+    }
   };
 
   // Update unread count for a specific user
@@ -425,13 +441,19 @@ const Chat = ({ user, onLogout }) => {
              formattedLastMessage = 'Blocked';
            } else if (chatRoom.lastMessage) {
              const lastMsg = chatRoom.lastMessage;
-             const isSentByCurrentUser = lastMsg.sender && 
-               (lastMsg.sender._id === currentUser.id || lastMsg.sender.id === currentUser.id);
              
-             if (isSentByCurrentUser) {
-               formattedLastMessage = `You: ${lastMsg.content}`;
+             // Handle system messages
+             if (lastMsg.messageType === 'system') {
+               formattedLastMessage = `🔒 ${lastMsg.content}`;
              } else {
-               formattedLastMessage = lastMsg.content;
+               const isSentByCurrentUser = lastMsg.sender && 
+                 (lastMsg.sender._id === currentUser.id || lastMsg.sender.id === currentUser.id);
+               
+               if (isSentByCurrentUser) {
+                 formattedLastMessage = `You: ${lastMsg.content}`;
+               } else {
+                 formattedLastMessage = lastMsg.content;
+               }
              }
            } else {
              formattedLastMessage = '';
@@ -531,6 +553,30 @@ const Chat = ({ user, onLogout }) => {
       localStorage.removeItem('selectedChat') // Clear after use
     }
     
+    // Request notification permission on app start (for all platforms, not just mobile)
+    notificationService.requestPermission().then(granted => {
+      if (granted) {
+        console.log('📱 Push notifications enabled successfully');
+      } else {
+        console.log('📱 Push notifications permission denied');
+      }
+    }).catch(error => {
+      console.error('📱 Error setting up push notifications:', error);
+    });
+    
+    // Listen for navigation events from notifications
+    const handleNavigateToChat = (event) => {
+      const { chatId } = event.detail;
+      // Find chat and select it
+      const chat = chats.find(c => c.id === chatId);
+      if (chat) {
+        setSelectedChat(chat);
+        setSelectedGroup(null);
+      }
+    };
+    
+    window.addEventListener('navigateToChat', handleNavigateToChat);
+    
     // Fetch chat rooms, groups, blocked users, friends count, and posts count on component mount
     fetchChatRooms()
     fetchGroups()
@@ -559,6 +605,7 @@ const Chat = ({ user, onLogout }) => {
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('navigateToChat', handleNavigateToChat)
     }
   }, [])
 
@@ -927,7 +974,7 @@ const Chat = ({ user, onLogout }) => {
             // Show notification for message from other group
             const senderName = data.message.sender?.name || 'Unknown';
             const messageContent = data.message.content;
-            showNotification(`Group: ${senderName}`, messageContent);
+            showNotification(`Group: ${senderName}`, messageContent, groupId);
           }
           
           // Always refresh groups to update unread counts
@@ -964,7 +1011,7 @@ const Chat = ({ user, onLogout }) => {
             // Show notification for message from other chat
             const senderName = data.message.sender?.name || 'Unknown';
             const messageContent = data.message.content;
-            showNotification(senderName, messageContent);
+            showNotification(senderName, messageContent, senderId);
             
             // Unread count is managed by backend based on viewing status
             if (!data.message.isRead) {
@@ -1166,6 +1213,14 @@ const Chat = ({ user, onLogout }) => {
           roomName: data.roomName,
           isIncoming: true,
         })
+        
+        // Show native call notification
+        if (notificationService.isEnabled()) {
+          notificationService.showCallNotification(
+            data.caller?.name || 'Unknown',
+            data.callType || 'voice'
+          );
+        }
       }
 
       const handleCallInitiated = (data) => {
@@ -1219,6 +1274,130 @@ const Chat = ({ user, onLogout }) => {
       socket.on('call-ended', handleCallEnded)
       socket.on('call-error', handleCallError)
 
+      // Blocking status events
+      const handleUserBlocked = (data) => {
+        console.log('🚫 User blocked event received:', data)
+        const { blockedBy } = data
+        
+        // Show notification that user has been blocked
+        showNotification('Blocked', `You have been blocked by ${blockedBy.name}`)
+        
+        // Native notification for blocking
+        if (isMobilePlatform() && notificationService.isEnabled()) {
+          notificationService.showSystemNotification(
+            'User Blocked',
+            `You have been blocked by ${blockedBy.name}`,
+            'blocked'
+          );
+        }
+        
+        // If this is the currently selected chat, update blocking status
+        if (selectedChat && selectedChat.id === blockedBy._id) {
+          setIsCurrentChatBlocked(true)
+          // Clear any pending messages
+          setMessages(prev => prev.filter(msg => !msg.isTemporary))
+        }
+        
+        // Refresh chat rooms to update blocking status for both users
+        fetchChatRooms()
+        fetchBlockedUsers()
+        
+        // Force update chat list to show 'Blocked' status
+        setChats(prevChats => 
+          prevChats.map(chat => 
+            chat.id === blockedBy._id 
+              ? { ...chat, lastMessage: 'Blocked', isBlocked: true }
+              : chat
+          )
+        )
+      }
+
+      const handleUserUnblocked = (data) => {
+        console.log('✅ User unblocked event received:', data)
+        const { unblockedBy } = data
+        
+        // Show notification that user has been unblocked
+        showNotification('Unblocked', `You have been unblocked by ${unblockedBy.name}`)
+        
+        // Native notification for unblocking
+        if (isMobilePlatform() && notificationService.isEnabled()) {
+          notificationService.showSystemNotification(
+            'User Unblocked',
+            `You have been unblocked by ${unblockedBy.name}`,
+            'unblocked'
+          );
+        }
+        
+        // If this is the currently selected chat, update blocking status
+        if (selectedChat && selectedChat.id === unblockedBy._id) {
+          setIsCurrentChatBlocked(false)
+        }
+        
+        // Refresh chat rooms to update blocking status
+        fetchChatRooms()
+        fetchBlockedUsers()
+        
+        // Force update chat list to remove 'Blocked' status
+        setChats(prevChats => 
+          prevChats.map(chat => 
+            chat.id === unblockedBy._id 
+              ? { ...chat, isBlocked: false }
+              : chat
+          )
+        )
+      }
+
+      const handleUserBlockStatusUpdated = (data) => {
+        console.log('🔄 Block status updated:', data)
+        const { action, blockedUser, unblockedUser } = data
+        
+        if (action === 'blocked' && blockedUser) {
+          // Current user blocked someone
+          showNotification('User Blocked', `${blockedUser.name} has been blocked`)
+          
+          // If this is the currently selected chat, update blocking status
+          if (selectedChat && selectedChat.id === blockedUser._id) {
+            setIsCurrentChatBlocked(true)
+            // Clear any pending messages
+            setMessages(prev => prev.filter(msg => !msg.isTemporary))
+          }
+          
+          // Force update chat list to show 'Blocked' status
+          setChats(prevChats => 
+            prevChats.map(chat => 
+              chat.id === blockedUser._id 
+                ? { ...chat, lastMessage: 'Blocked', isBlocked: true }
+                : chat
+            )
+          )
+        } else if (action === 'unblocked' && unblockedUser) {
+          // Current user unblocked someone
+          showNotification('User Unblocked', `${unblockedUser.name} has been unblocked`)
+          
+          // If this is the currently selected chat, update blocking status
+          if (selectedChat && selectedChat.id === unblockedUser._id) {
+            setIsCurrentChatBlocked(false)
+          }
+          
+          // Force update chat list to remove 'Blocked' status
+          setChats(prevChats => 
+            prevChats.map(chat => 
+              chat.id === unblockedUser._id 
+                ? { ...chat, isBlocked: false }
+                : chat
+            )
+          )
+        }
+        
+        // Refresh chat rooms and blocked users list
+        fetchChatRooms()
+        fetchBlockedUsers()
+      }
+
+      socket.on('user-blocked', handleUserBlocked)
+      socket.on('user-unblocked', handleUserUnblocked)
+      socket.on('user-block-status-updated', handleUserBlockStatusUpdated)
+
       return () => {
         // Message events
         socket.off('new-message', handleNewMessageSocket)
@@ -1241,6 +1420,11 @@ const Chat = ({ user, onLogout }) => {
         socket.off('call-declined', handleCallDeclined)
         socket.off('call-ended', handleCallEnded)
         socket.off('call-error', handleCallError)
+        
+        // Blocking events
+        socket.off('user-blocked', handleUserBlocked)
+        socket.off('user-unblocked', handleUserUnblocked)
+        socket.off('user-block-status-updated', handleUserBlockStatusUpdated)
         
         console.log('🔌 Socket event listeners removed for user:', currentUser.name);
       }

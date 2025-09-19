@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, Fragment } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 import { API_CONFIG } from '../config/mobileConfig';
 
@@ -250,24 +250,82 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
-    const now = new Date();
-    const diffInHours = (now - date) / (1000 * 60 * 60);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
 
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
-    } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
+  const formatDate = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    // Check if it's today
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
     }
+    
+    // Check if it's yesterday
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    }
+    
+    // Check if it's within this week
+    const weekAgo = new Date(today);
+    weekAgo.setDate(today.getDate() - 7);
+    if (date > weekAgo) {
+      return date.toLocaleDateString('en-US', { weekday: 'long' });
+    }
+    
+    // For older dates
+    return date.toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+    });
+  };
+
+  const isSameDay = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return d1.toDateString() === d2.toDateString();
+  };
+
+  const renderDateSeparator = (date) => {
+    return (
+      <div
+        key={`date-${date}`}
+        className="date-separator"
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          margin: '16px 0 8px 0',
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: '#E3F2FD',
+            color: '#1976D2',
+            padding: '4px 12px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            fontWeight: '500',
+            textAlign: 'center',
+            border: '1px solid #BBDEFB',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+          }}
+        >
+          {formatDate(date)}
+        </div>
+      </div>
+    );
   };
 
   const renderFileAttachment = (attachment, messageType) => {
@@ -401,7 +459,42 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
     const messageId = message._id || message.id;
     const userReaction = message.reactions?.find(r => r.user?._id === currentUserId || r.user?.id === currentUserId);
     const isDeleted = message.isDeleted || message.messageType === 'deleted';
+    const isSystemMessage = message.messageType === 'system';
     const isLongPressed = longPressMessage && (longPressMessage._id || longPressMessage.id) === messageId;
+
+    // Render system messages differently
+    if (isSystemMessage) {
+      return (
+        <div
+          key={messageId}
+          className="system-message"
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            margin: '8px 0',
+            padding: '0 16px',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#E3F2FD',
+              color: '#1976D2',
+              padding: '6px 12px',
+              borderRadius: '12px',
+              fontSize: '12px',
+              fontWeight: '500',
+              textAlign: 'center',
+              border: '1px solid #BBDEFB',
+              maxWidth: '80%',
+              wordWrap: 'break-word',
+            }}
+          >
+            🔒 {message.content}
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div
@@ -686,7 +779,21 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
             display: none; /* Safari and Chrome */
           }
         `}</style>
-        {validMessages.map(renderMessage)}
+        {validMessages.map((message, index) => {
+          const currentMessageDate = message.timestamp;
+          const previousMessage = index > 0 ? validMessages[index - 1] : null;
+          const previousMessageDate = previousMessage ? previousMessage.timestamp : null;
+          
+          // Show date separator if this is the first message or if the date is different from previous message
+          const showDateSeparator = index === 0 || !isSameDay(currentMessageDate, previousMessageDate);
+          
+          return (
+            <Fragment key={message._id || message.id}>
+              {showDateSeparator && renderDateSeparator(currentMessageDate)}
+              {renderMessage(message)}
+            </Fragment>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
