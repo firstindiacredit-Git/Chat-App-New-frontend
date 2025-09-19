@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { API_CONFIG } from '../config/mobileConfig'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Header from './Header'
 import AvatarUpload from './AvatarUpload'
 import MessageList from './MessageList'
@@ -9,13 +9,17 @@ import Story from './Story'
 import GroupManagement from './GroupManagement'
 import CallHistory from './CallHistory'
 import CallButton from './CallButton'
-import JitsiMeet from './JitsiMeet'
+import WebRTCAudioCall from './WebRTCAudioCall'
 import MobileLayout from './MobileLayout'
+import GlobalSearch from './GlobalSearch'
+import NewsFeed from './NewsFeed'
 import { useSocket } from '../contexts/SocketContext'
 import { isMobilePlatform } from '../utils/mobilePermissions'
+import { AiOutlineSearch } from "react-icons/ai";
 
 const Chat = ({ user, onLogout }) => {
   const { socket, isConnected, isUserOnline } = useSocket()
+  const navigate = useNavigate()
   const [chats, setChats] = useState([])
   const [selectedChat, setSelectedChat] = useState(null)
   const [messages, setMessages] = useState([])
@@ -26,7 +30,7 @@ const Chat = ({ user, onLogout }) => {
   const [notifications, setNotifications] = useState([])
   const [unreadCounts, setUnreadCounts] = useState({})
   const [viewingUsers, setViewingUsers] = useState({}) // Track who is viewing which chat
-  const [activeTab, setActiveTab] = useState('chats') // Tab state: chats, stories, groups, calls
+  const [activeTab, setActiveTab] = useState('chats') // Tab state: chats, stories, groups, calls, newsfeed
   const [showStoryComponent, setShowStoryComponent] = useState(false)
   const [groups, setGroups] = useState([])
   const [selectedGroup, setSelectedGroup] = useState(null)
@@ -39,6 +43,21 @@ const Chat = ({ user, onLogout }) => {
   const [activeCall, setActiveCall] = useState(null)
   const [incomingCall, setIncomingCall] = useState(null)
   const [showCallHistory, setShowCallHistory] = useState(false)
+  const [blockedUsers, setBlockedUsers] = useState([])
+  const [isCurrentChatBlocked, setIsCurrentChatBlocked] = useState(false)
+  const [showDeleteChatModal, setShowDeleteChatModal] = useState(false)
+  const [chatToDelete, setChatToDelete] = useState(null)
+  const [longPressTimer, setLongPressTimer] = useState(null)
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false)
+  const [searchPreview, setSearchPreview] = useState('')
+  const [friendsCount, setFriendsCount] = useState(0)
+  const [postsCount, setPostsCount] = useState(0)
+  const [userPosts, setUserPosts] = useState([])
+  const [loadingPosts, setLoadingPosts] = useState(false)
+  const [showFriendsList, setShowFriendsList] = useState(false)
+  const [friendsList, setFriendsList] = useState([])
+  const [showPostDetail, setShowPostDetail] = useState(false)
+  const [selectedPost, setSelectedPost] = useState(null)
   const messagesEndRef = useRef(null)
 
   // Show notification for new message
@@ -238,6 +257,127 @@ const Chat = ({ user, onLogout }) => {
     }
   }
 
+  // Fetch blocked users from API
+  const fetchBlockedUsers = async () => {
+    try {
+      const response = await fetch(`${API_CONFIG.API_URL}/users/blocked`, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        },
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        const blockedUserIds = data.data.blockedUsers.map(blockedUser => blockedUser._id)
+        setBlockedUsers(blockedUserIds)
+        console.log('📛 Blocked users:', blockedUserIds)
+      } else {
+        console.error('Failed to fetch blocked users:', data.message)
+        setBlockedUsers([])
+      }
+    } catch (error) {
+      console.error('Error fetching blocked users:', error)
+      setBlockedUsers([])
+    }
+  }
+
+  // Fetch friends count and list
+  const fetchFriendsCount = async () => {
+    try {
+      console.log('🔍 Fetching friends count...')
+      const response = await fetch(`${API_CONFIG.API_URL}/friends/list`, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        },
+      })
+      
+      console.log('📡 Friends API response status:', response.status)
+      const data = await response.json()
+      console.log('📊 Friends API response data:', data)
+      
+      if (data.success) {
+        const friendsList = data.data?.friends || []
+        console.log('👥 Friends list:', friendsList)
+        console.log('👥 Friends count:', friendsList.length)
+        setFriendsCount(friendsList.length)
+        setFriendsList(friendsList)
+      } else {
+        console.error('❌ Failed to fetch friends count:', data.message)
+        setFriendsCount(0)
+        setFriendsList([])
+      }
+    } catch (error) {
+      console.error('❌ Error fetching friends count:', error)
+      setFriendsCount(0)
+      setFriendsList([])
+    }
+  }
+
+  // Fetch posts count and user posts
+  const fetchPostsCount = async () => {
+    try {
+      console.log('🔍 Fetching posts count...')
+      setLoadingPosts(true)
+      const response = await fetch(`${API_CONFIG.API_URL}/posts/my-posts`, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        },
+      })
+      
+      console.log('📡 Posts API response status:', response.status)
+      const data = await response.json()
+      console.log('📊 Posts API response data:', data)
+      
+      // Posts API returns { posts: [], hasMore: boolean, page: number }
+      if (data.posts) {
+        const postsList = data.posts || []
+        console.log('📰 Posts list:', postsList)
+        console.log('📰 Posts count:', postsList.length)
+        setPostsCount(postsList.length)
+        setUserPosts(postsList)
+      } else {
+        console.error('❌ Failed to fetch posts count:', data.error)
+        setPostsCount(0)
+        setUserPosts([])
+      }
+    } catch (error) {
+      console.error('❌ Error fetching posts count:', error)
+      setPostsCount(0)
+      setUserPosts([])
+    } finally {
+      setLoadingPosts(false)
+    }
+  }
+
+  // Check if current chat user is blocked (either way)
+  const checkIfCurrentChatBlocked = async () => {
+    if (selectedChat && selectedChat.id) {
+      try {
+        const response = await fetch(`${API_CONFIG.API_URL}/users/profile/${selectedChat.id}`, {
+          headers: {
+            'Authorization': `Bearer ${user.token}`,
+          },
+        })
+        const data = await response.json()
+        if (data.success) {
+          const isBlocked = data.data.isBlocked // Backend returns true if blocked either way
+          setIsCurrentChatBlocked(isBlocked)
+          console.log(`🔍 Block status for ${selectedChat.name}:`, {
+            hasBlocked: data.data.hasBlocked,
+            isBlockedBy: data.data.isBlockedBy,
+            finalStatus: isBlocked
+          })
+        }
+      } catch (error) {
+        console.error('Error checking block status:', error)
+        setIsCurrentChatBlocked(false)
+      }
+    } else {
+      setIsCurrentChatBlocked(false)
+    }
+  }
+
   // Fetch chat rooms from API
   const fetchChatRooms = async () => {
     try {
@@ -251,8 +391,8 @@ const Chat = ({ user, onLogout }) => {
       const data = await response.json()
       
        if (data.success) {
-         // Transform chat rooms to match expected format
-         const transformedChats = data.data.chatRooms.map(chatRoom => {
+         // Transform chat rooms to match expected format and check block status
+         const transformedChats = await Promise.all(data.data.chatRooms.map(async (chatRoom) => {
            const userId = chatRoom.otherUser.id;
            const apiUnreadCount = chatRoom.unreadCount || 0;
            
@@ -262,18 +402,53 @@ const Chat = ({ user, onLogout }) => {
            if (apiUnreadCount > 0) {
              console.log(`🔔 ${chatRoom.otherUser.name} has ${apiUnreadCount} unread message${apiUnreadCount > 1 ? 's' : ''}`);
            }
+
+           // Check if this user is blocked (either direction)
+           let isBlocked = false;
+           try {
+             const profileResponse = await fetch(`${API_CONFIG.API_URL}/users/profile/${userId}`, {
+               headers: {
+                 'Authorization': `Bearer ${user.token}`,
+               },
+             });
+             const profileData = await profileResponse.json();
+             if (profileData.success) {
+               isBlocked = profileData.data.isBlocked;
+             }
+           } catch (error) {
+             console.error(`Error checking block status for ${chatRoom.otherUser.name}:`, error);
+           }
            
+           // Format last message with sender info
+           let formattedLastMessage = '';
+           if (isBlocked) {
+             formattedLastMessage = 'Blocked';
+           } else if (chatRoom.lastMessage) {
+             const lastMsg = chatRoom.lastMessage;
+             const isSentByCurrentUser = lastMsg.sender && 
+               (lastMsg.sender._id === currentUser.id || lastMsg.sender.id === currentUser.id);
+             
+             if (isSentByCurrentUser) {
+               formattedLastMessage = `You: ${lastMsg.content}`;
+             } else {
+               formattedLastMessage = lastMsg.content;
+             }
+           } else {
+             formattedLastMessage = '';
+           }
+
            return {
              id: userId,
              name: chatRoom.otherUser.name,
              avatar: chatRoom.otherUser.avatar || '',
-             lastMessage: chatRoom.lastMessage ? chatRoom.lastMessage.content : '',
+             isBlocked: isBlocked,
+             lastMessage: formattedLastMessage,
              time: chatRoom.lastMessage ? chatRoom.lastMessage.timestamp : '',
              unread: apiUnreadCount,
              online: isUserOnline(userId),
              type: 'private' // Mark as private chat
            };
-         })
+         }))
          
          // Add group chats to the main chats list
          const groupChats = groups.map(group => ({
@@ -283,7 +458,11 @@ const Chat = ({ user, onLogout }) => {
            lastMessage: group.lastMessage ? 
              (group.lastMessage.messageType === 'system' ? 
                group.lastMessage.content : 
-               `${group.lastMessage.sender?.name}: ${group.lastMessage.content}`
+               (group.lastMessage.sender && 
+                (group.lastMessage.sender._id === currentUser.id || group.lastMessage.sender.id === currentUser.id) ?
+                `You: ${group.lastMessage.content}` :
+                `${group.lastMessage.sender?.name}: ${group.lastMessage.content}`
+               )
              ) : 'No messages yet',
            time: group.lastActivity || '',
            unread: group.unreadCount || 0,
@@ -352,9 +531,12 @@ const Chat = ({ user, onLogout }) => {
       localStorage.removeItem('selectedChat') // Clear after use
     }
     
-    // Fetch chat rooms and groups on component mount
+    // Fetch chat rooms, groups, blocked users, friends count, and posts count on component mount
     fetchChatRooms()
     fetchGroups()
+    fetchBlockedUsers()
+    fetchFriendsCount()
+    fetchPostsCount()
     
     // Auto-refresh unread counts every 30 seconds
     const interval = setInterval(() => {
@@ -396,6 +578,11 @@ const Chat = ({ user, onLogout }) => {
       notifyUserViewingChat(null, false)
     }
   }, [selectedChat])
+
+  // Check if current chat is blocked when selectedChat or blockedUsers change
+  useEffect(() => {
+    checkIfCurrentChatBlocked()
+  }, [selectedChat, blockedUsers])
 
   // Fetch messages when a group is selected
   useEffect(() => {
@@ -443,6 +630,210 @@ const Chat = ({ user, onLogout }) => {
     setSelectedChat(null) // Clear private chat selection
     setActiveTab('chats') // Switch to chats tab to show the group chat
   }
+
+  // Handle user name click to show profile (only for friends)
+  const handleUserNameClick = async (clickedUser) => {
+    console.log('👤 User name clicked:', clickedUser);
+    const userId = clickedUser._id || clickedUser.id;
+    if (userId) {
+      try {
+        // Check if users are friends before allowing profile access
+        const response = await fetch(`${API_CONFIG.API_URL}/friends/status/${userId}`, {
+          headers: {
+            'Authorization': `Bearer ${user.token}`,
+          },
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data.status === 'friend') {
+          // Add fromChat parameter to indicate we came from a chat
+          navigate(`/profile/${userId}?fromChat=true`);
+        } else {
+          alert('You can only view profiles of your friends. Send a friend request first.');
+        }
+      } catch (error) {
+        console.error('Error checking friendship status:', error);
+        alert('Unable to access profile. Please try again.');
+      }
+    } else {
+      console.error('No user ID found for clicked user:', clickedUser);
+    }
+  }
+
+  // Long press handlers for chat deletion
+  const handleChatLongPressStart = (chat, event) => {
+    event.preventDefault();
+    const timer = setTimeout(() => {
+      // Add haptic feedback for mobile devices
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      setChatToDelete(chat);
+      setShowDeleteChatModal(true);
+      setLongPressTimer(null);
+    }, 800); // 800ms for long press
+    
+    setLongPressTimer(timer);
+  };
+
+  const handleChatLongPressEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
+  // Delete chat functionality
+  const handleDeleteChat = async () => {
+    if (!chatToDelete) return;
+
+    try {
+      const response = await fetch(`${API_CONFIG.API_URL}/messages/delete-chat/${chatToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Remove chat from local state
+        setChats(prevChats => prevChats.filter(chat => chat.id !== chatToDelete.id));
+        
+        // If this was the selected chat, clear it
+        if (selectedChat && selectedChat.id === chatToDelete.id) {
+          setSelectedChat(null);
+          setMessages([]);
+        }
+        
+        // Show success message
+        showNotification('Chat Deleted', `Chat with ${chatToDelete.name} has been deleted`);
+        
+        // Close modal
+        setShowDeleteChatModal(false);
+        setChatToDelete(null);
+      } else {
+        console.error('Failed to delete chat:', data.message);
+        alert('Failed to delete chat. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      alert('Error deleting chat. Please try again.');
+    }
+  };
+
+  // Handle chat selection from search
+  const handleSearchChatSelect = (chatData) => {
+    setSelectedChat(chatData);
+    setSelectedGroup(null);
+  };
+
+  // Handle search query changes
+  const handleSearchQueryChange = (query) => {
+    setSearchPreview(query);
+  };
+
+  // Handle search close (only when explicitly closed)
+  const handleSearchClose = () => {
+    console.log('🔍 Search closed via close button - returning to chat list');
+    setShowGlobalSearch(false);
+    setSearchPreview('');
+    
+    // Refresh chat list after search closes
+    fetchChatRooms();
+  };
+
+  // Handle friends click - navigate directly
+  const handleFriendsClick = () => {
+    setShowFriendsList(true);
+    setShowProfile(false); // Hide profile page
+  };
+
+  // Handle friend message
+  const handleFriendMessage = (friend) => {
+    setSelectedChat({
+      id: friend._id,
+      name: friend.name,
+      avatar: friend.avatar
+    });
+    setShowFriendsList(false);
+    setShowProfile(false);
+  };
+
+  // Handle friend remove
+  const handleFriendRemove = async (friendId) => {
+    if (!window.confirm('Are you sure you want to remove this friend?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_CONFIG.API_URL}/friends/remove/${friendId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Refresh friends list
+        fetchFriendsCount();
+        showNotification('Friend Removed', 'Friend has been removed successfully');
+      } else {
+        alert(data.message || 'Failed to remove friend');
+      }
+    } catch (error) {
+      console.error('Error removing friend:', error);
+      alert('Failed to remove friend. Please try again.');
+    }
+  };
+
+  // Handle post click
+  const handlePostClick = (post) => {
+    setSelectedPost(post);
+    setShowPostDetail(true);
+  };
+
+  // Handle post edit
+  const handlePostEdit = (post) => {
+    // This will be implemented in the post detail modal
+    console.log('Edit post:', post);
+  };
+
+  // Handle post delete
+  const handlePostDelete = async (postId) => {
+    if (!window.confirm('Are you sure you want to delete this post?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_CONFIG.API_URL}/posts/${postId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Refresh posts
+        fetchPostsCount();
+        setShowPostDetail(false);
+        setSelectedPost(null);
+        showNotification('Post Deleted', 'Post has been deleted successfully');
+      } else {
+        alert(data.message || 'Failed to delete post');
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      alert('Failed to delete post. Please try again.');
+    }
+  };
+
 
   // Handle message sent
   const handleMessageSent = (messageData) => {
@@ -937,60 +1328,234 @@ const Chat = ({ user, onLogout }) => {
           showActions={false}
         />
         
-        <div className="profile-content">
-          <div className="profile-avatar" style={{ position: 'relative' }}>
-            {currentUser.avatar ? (
-              <img 
-                src={currentUser.avatar}
-                alt="Profile"
-              />
-            ) : (
-              <div className="default-avatar-large">
-                {currentUser.name?.charAt(0)?.toUpperCase() || 'U'}
+        <div className="instagram-profile-container">
+          {/* Profile Header */}
+          <div className="profile-header">
+            <div className="profile-avatar-section">
+              {currentUser.avatar ? (
+                <img 
+                  src={currentUser.avatar}
+                  alt="Profile"
+                  className="profile-avatar-large"
+                />
+              ) : (
+                <div className="default-avatar-extra-large">
+                  {currentUser.name?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+              )}
+              <button
+                onClick={() => setShowAvatarUpload(true)}
+                className="avatar-edit-btn"
+                title="Update Avatar"
+              >
+                📷
+              </button>
+            </div>
+            
+            <div className="profile-stats-section">
+              <div className="stats-row">
+                <div className="stat-item">
+                  <span className="stat-number">{postsCount}</span>
+                  <span className="stat-label">posts</span>
+                </div>
+                <div className="stat-item clickable" onClick={handleFriendsClick}>
+                  <span className="stat-number">{friendsCount}</span>
+                  <span className="stat-label">friends</span>
+                </div>
               </div>
-            )}
-            <button
-              onClick={() => setShowAvatarUpload(true)}
-              style={{
-                position: 'absolute',
-                bottom: '5px',
-                right: '5px',
-                background: '#25D366',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '36px',
-                height: '36px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-              }}
-              title="Update Avatar"
-            >
-              📷
+            </div>
+          </div>
+
+          {/* Profile Info */}
+          <div className="profile-info-section">
+            <h1 className="profile-name">{currentUser.name || 'User'}</h1>
+            {currentUser.bio && <p className="profile-bio">{currentUser.bio}</p>}
+            <div className="profile-details">
+              <p className="profile-email">📧 {currentUser.email}</p>
+              {currentUser.phone && (
+                <p className="profile-phone">📱 {currentUser.phone}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Profile Actions */}
+          <div className="profile-actions-section">
+            <button className="edit-profile-btn" onClick={() => setShowAvatarUpload(true)}>
+              Edit Profile
             </button>
-          </div>
-          
-          <div className="profile-info">
-            <h2>{currentUser.name || 'User'}</h2>
-            <p className="profile-email">{currentUser.email}</p>
-            {currentUser.phone && (
-              <p className="profile-phone">
-                <span className="phone-icon">📱</span>
-                {currentUser.phone}
-              </p>
-            )}
-            {currentUser.bio && <p className="bio">{currentUser.bio}</p>}
-          </div>
-          
-          <div className="profile-actions">
-            <button className="btn btn-secondary" onClick={onLogout}>
+            <button className="logout-btn" onClick={onLogout}>
               Logout
             </button>
           </div>
+
+          {/* Posts Section */}
+          <div className="posts-section">
+            <div className="posts-header">
+              <h3>Posts</h3>
+              <span className="posts-count-badge">{postsCount}</span>
+            </div>
+            
+            {loadingPosts ? (
+              <div className="posts-loading">
+                <div className="loading-spinner">⏳</div>
+                <p>Loading posts...</p>
+              </div>
+            ) : userPosts.length > 0 ? (
+              <div className="posts-grid">
+                {userPosts.map((post) => (
+                  <div key={post._id} className="post-grid-item" onClick={() => handlePostClick(post)}>
+                    <img 
+                      src={post.image?.url} 
+                      alt="Post" 
+                      className="post-thumbnail"
+                    />
+                    <div className="post-overlay">
+                      <div className="post-stats">
+                        <span>❤️ {post.likes?.length || 0}</span>
+                        <span>💬 {post.comments?.length || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="no-posts">
+                <div className="no-posts-icon">📷</div>
+                <h3>No Posts Yet</h3>
+                <p>Share your first post to get started!</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+
+        {/* Post Detail Modal */}
+        {showPostDetail && selectedPost && (
+          <div className="modal-backdrop">
+            <div className="post-detail-modal">
+              <div className="modal-header">
+                <h3>Post Details</h3>
+                <button 
+                  className="close-btn"
+                  onClick={() => setShowPostDetail(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="post-detail-content">
+                <div className="post-image-section">
+                  <img 
+                    src={selectedPost.image?.url} 
+                    alt="Post" 
+                    className="post-detail-image"
+                  />
+                </div>
+                <div className="post-info-section">
+                  <div className="post-header">
+                    <div className="post-user-info">
+                      {currentUser.avatar ? (
+                        <img src={currentUser.avatar} alt="Profile" className="post-user-avatar" />
+                      ) : (
+                        <div className="post-user-avatar default">
+                          {currentUser.name?.charAt(0)?.toUpperCase() || 'U'}
+                        </div>
+                      )}
+                      <div>
+                        <h4>{currentUser.name}</h4>
+                        <span className="post-time">
+                          {new Date(selectedPost.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="post-menu">
+                      <button 
+                        className="edit-post-btn"
+                        onClick={() => handlePostEdit(selectedPost)}
+                      >
+                        ✏️
+                      </button>
+                      <button 
+                        className="delete-post-btn"
+                        onClick={() => handlePostDelete(selectedPost._id)}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                  <div className="post-caption">
+                    <p>{selectedPost.caption || 'No caption'}</p>
+                  </div>
+                  <div className="post-stats-detail">
+                    <span>❤️ {selectedPost.likes?.length || 0} likes</span>
+                    <span>💬 {selectedPost.comments?.length || 0} comments</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Show Friends List Page
+  if (showFriendsList) {
+    return (
+      <div className="friends-page-fullscreen">
+        {/* Instagram-style Header */}
+        <div className="friends-header">
+          <button 
+            className="back-btn"
+            onClick={() => setShowFriendsList(false)}
+          >
+            ←
+          </button>
+          <h1>Following</h1>
+          <div className="header-spacer"></div>
+        </div>
+        
+        <div className="friends-content">
+          {friendsList.length > 0 ? (
+            <div className="instagram-friends-list">
+              {friendsList.map((friend) => (
+                <div key={friend._id} className="instagram-friend-item">
+                  <div className="friend-avatar-section">
+                    {friend.avatar ? (
+                      <img src={friend.avatar} alt={friend.name} className="friend-avatar" />
+                    ) : (
+                      <div className="default-avatar">
+                        {friend.name?.charAt(0)?.toUpperCase() || 'U'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="friend-details">
+                    <h3 className="friend-username">{friend.name}</h3>
+                    <p className="friend-name">{friend.name}</p>
+                  </div>
+                  <div className="friend-actions">
+                    <button 
+                      className="message-btn-instagram"
+                      onClick={() => handleFriendMessage(friend)}
+                    >
+                      Message
+                    </button>
+                    <button 
+                      className="remove-btn-instagram"
+                      onClick={() => handleFriendRemove(friend._id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="no-friends-instagram">
+              <div className="no-friends-icon">👥</div>
+              <h2>No Following</h2>
+              <p>When you follow people, you'll see them here.</p>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -1017,10 +1582,10 @@ const Chat = ({ user, onLogout }) => {
     )
   }
 
-  // Show active call
-  if (activeCall && activeCall.callId) {
+  // Show active call (only audio calls, remove video for now)
+  if (activeCall && activeCall.callId && activeCall.callType === 'voice') {
     return (
-      <JitsiMeet
+      <WebRTCAudioCall
         user={currentUser}
         callData={activeCall}
         isIncoming={false}
@@ -1031,10 +1596,10 @@ const Chat = ({ user, onLogout }) => {
     )
   }
 
-  // Show incoming call
-  if (incomingCall) {
+  // Show incoming call (only audio calls)
+  if (incomingCall && incomingCall.callType === 'voice') {
     return (
-      <JitsiMeet
+      <WebRTCAudioCall
         user={currentUser}
         callData={incomingCall}
         isIncoming={true}
@@ -1065,11 +1630,12 @@ const Chat = ({ user, onLogout }) => {
   }
 
   // Show full-screen tab content for non-chat tabs
-  if (activeTab === 'stories' || activeTab === 'groups' || activeTab === 'calls') {
+  if (activeTab === 'stories' || activeTab === 'groups' || activeTab === 'calls' || activeTab === 'newsfeed') {
     const getTabTitle = () => {
       if (activeTab === 'stories') return 'Stories';
       if (activeTab === 'groups') return 'Groups';
       if (activeTab === 'calls') return 'Calls';
+      if (activeTab === 'newsfeed') return 'News Feed';
       return 'Tab';
     };
 
@@ -1100,6 +1666,13 @@ const Chat = ({ user, onLogout }) => {
 
           {activeTab === 'calls' && (
             <CallHistory
+              user={currentUser}
+              onBack={() => setActiveTab('chats')}
+            />
+          )}
+
+          {activeTab === 'newsfeed' && (
+            <NewsFeed
               user={currentUser}
               onBack={() => setActiveTab('chats')}
             />
@@ -1145,6 +1718,14 @@ const Chat = ({ user, onLogout }) => {
           >
             <span className="tab-icon">📞</span>
             <span className="tab-label">Calls</span>
+          </button>
+          
+          <button 
+            className={`tab-btn ${activeTab === 'newsfeed' ? 'active' : ''}`}
+            onClick={() => setActiveTab('newsfeed')}
+          >
+            <span className="tab-icon">📰</span>
+            <span className="tab-label">Feed</span>
           </button>
         </div>
       </div>
@@ -1431,6 +2012,7 @@ const Chat = ({ user, onLogout }) => {
             onMessageReceived={handleNewGroupMessage}
             isUserInChat={true}
             isGroupChat={true}
+            onUserNameClick={handleUserNameClick}
           />
         </div>
         
@@ -1485,18 +2067,10 @@ const Chat = ({ user, onLogout }) => {
             });
           }}
           onVideoCall={() => {
-            if (!socket || !isConnected) {
-              alert('Not connected to server');
-              return;
-            }
-            
-            console.log('📹 Initiating video call to:', chat.name);
-            // Emit call initiation through socket (same as CallButton)
-            socket.emit('call-initiate', {
-              receiverId: chat.id,
-              callType: 'video',
-            });
+            alert('Video calls are currently disabled. Only audio calls are available.');
           }}
+          onReceiverClick={handleUserNameClick}
+          isReceiverBlocked={isCurrentChatBlocked}
         />
         
         <div className="messages-container">
@@ -1506,16 +2080,38 @@ const Chat = ({ user, onLogout }) => {
             receiver={chat}
             onMessageReceived={handleNewMessage}
             isUserInChat={true}
+            onUserNameClick={handleUserNameClick}
           />
         </div>
+        
+        {/* Instagram-style Blocked Alert above input */}
+        {isCurrentChatBlocked && (
+          <div className="blocked-alert-container" style={{
+            backgroundColor: '#f8f9fa',
+            borderTop: '1px solid #e9ecef',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            color: '#6c757d',
+            fontWeight: '500'
+          }}>
+            <span style={{ fontSize: '16px' }}>🚫</span>
+             {chat.name} is blocked.
+          </div>
+        )}
         
          <div className="message-input-container">
           <MessageInput 
             receiverId={chat.id}
             onMessageSent={handleMessageSent}
-            disabled={!isConnected}
+            disabled={!isConnected || isCurrentChatBlocked}
             currentUserId={currentUser.id}
             userToken={user.token}
+            isBlocked={isCurrentChatBlocked}
+            blockedUserName={chat.name}
           />
          </div>
       </div>
@@ -1531,7 +2127,78 @@ const Chat = ({ user, onLogout }) => {
         totalUnreadCount={chats.reduce((sum, chat) => sum + (chat.unread || 0), 0)}
         onProfileClick={() => setShowProfile(true)}
         title="Chats"
+        showFriendRequestsButton={true}
       />
+
+      {/* Global Search Bar */}
+      <div className="search-bar-container" style={{
+        position: 'sticky',
+      top: '5px',
+        zIndex: 999,
+        backgroundColor: 'white',
+        padding: '5px 5px',
+        borderBottom: '1px solid #e5e7eb',
+      
+      }}>
+        <div
+          onClick={() => setShowGlobalSearch(true)}
+          style={{
+            backgroundColor: '#f3f4f6',
+            borderRadius: '20px',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#e5e7eb';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#f3f4f6';
+          }}
+        >
+          <span style={{ 
+            color: '#6b7280', 
+            fontSize: '16px' 
+          }}><AiOutlineSearch /></span>
+          <span style={{ 
+            color: searchPreview ? '#374151' : '#9ca3af', 
+            fontSize: '14px',
+            flex: 1,
+            fontWeight: searchPreview ? '500' : 'normal'
+          }}>
+            {searchPreview || 'Search chats, messages, and contacts...'}
+          </span>
+          {searchPreview && (
+            <button
+              onClick={() => {
+                setSearchPreview('');
+                setShowGlobalSearch(false);
+              }}
+              style={{
+                color: '#6b7280',
+                fontSize: '14px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#e5e7eb';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Notifications */}
       {notifications.length > 0 && (
@@ -1578,6 +2245,19 @@ const Chat = ({ user, onLogout }) => {
                 setSelectedGroup(null)
               }
             }}
+            onMouseDown={(e) => handleChatLongPressStart(chat, e)}
+            onMouseUp={handleChatLongPressEnd}
+            onMouseLeave={handleChatLongPressEnd}
+            onTouchStart={(e) => handleChatLongPressStart(chat, e)}
+            onTouchEnd={handleChatLongPressEnd}
+            onTouchCancel={handleChatLongPressEnd}
+            style={{ 
+              cursor: 'pointer',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+              msUserSelect: 'none'
+            }}
           >
             <div className="chat-avatar">
               {chat && chat.avatar ? (
@@ -1611,8 +2291,23 @@ const Chat = ({ user, onLogout }) => {
                 </span>
               </div>
               <div className="chat-preview">
-                <p>{chat && chat.lastMessage ? chat.lastMessage : 'No messages yet'}</p>
-                {chat && chat.unread > 0 && (
+                <p style={{
+                  color: chat && chat.lastMessage === 'Blocked' ? '#dc2626' : 'inherit',
+                  fontWeight: chat && chat.lastMessage === 'Blocked' ? '500' : 'normal',
+                  fontStyle: chat && chat.lastMessage === 'Blocked' ? 'italic' : 'normal'
+                }}>
+                  {chat && chat.lastMessage ? (
+                    chat.lastMessage.startsWith('You: ') ? (
+                      <>
+                        <span style={{ color: '#666', fontWeight: '500' }}>You: </span>
+                        <span>{chat.lastMessage.substring(5)}</span>
+                      </>
+                    ) : (
+                      chat.lastMessage
+                    )
+                  ) : 'No messages yet'}
+                </p>
+                {chat && chat.unread > 0 && chat.lastMessage !== 'Blocked' && (
                   <span 
                     className="unread-badge" 
                     title={`${chat.unread} unread message${chat.unread > 1 ? 's' : ''}`}
@@ -1671,6 +2366,14 @@ const Chat = ({ user, onLogout }) => {
           <span className="tab-icon">📞</span>
           <span className="tab-label">Calls</span>
         </button>
+        
+        <button 
+          className={`tab-btn ${activeTab === 'newsfeed' ? 'active' : ''}`}
+          onClick={() => setActiveTab('newsfeed')}
+        >
+          <span className="tab-icon">📰</span>
+          <span className="tab-label">Feed</span>
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -1696,7 +2399,172 @@ const Chat = ({ user, onLogout }) => {
             onBack={() => setActiveTab('chats')}
           />
         )}
+
+        {activeTab === 'newsfeed' && (
+          <NewsFeed
+            user={currentUser}
+            onBack={() => setActiveTab('chats')}
+          />
+        )}
       </div>
+
+      {/* Delete Chat Confirmation Modal */}
+      {showDeleteChatModal && chatToDelete && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={() => {
+            setShowDeleteChatModal(false);
+            setChatToDelete(null);
+          }}
+        >
+          <div
+            className="delete-modal"
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '350px',
+              width: '100%',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              animation: 'modalSlideIn 0.3s ease-out',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  backgroundColor: '#fee2e2',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px',
+                }}
+              >
+                <span style={{ fontSize: '28px' }}>🗑️</span>
+              </div>
+              <h3
+                style={{
+                  margin: '0 0 12px 0',
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  color: '#333',
+                }}
+              >
+                Delete Chat
+              </h3>
+              <p
+                style={{
+                  margin: '0',
+                  color: '#666',
+                  fontSize: '16px',
+                  lineHeight: '1.5',
+                }}
+              >
+                Are you sure you want to delete your chat with{' '}
+                <strong>{chatToDelete.name}</strong>? This action cannot be undone and all messages will be permanently removed.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <button
+                onClick={() => {
+                  setShowDeleteChatModal(false);
+                  setChatToDelete(null);
+                }}
+                style={{
+                  padding: '12px 24px',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  color: '#666',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#f8f9fa';
+                  e.target.style.borderColor = '#adb5bd';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'white';
+                  e.target.style.borderColor = '#ddd';
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteChat}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#c82333';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = '#dc3545';
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes modalSlideIn {
+              from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+              }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* Global Search Overlay */}
+      {showGlobalSearch && (
+        <GlobalSearch
+          user={user}
+          onChatSelect={handleSearchChatSelect}
+          onClose={handleSearchClose}
+          onSearchQueryChange={handleSearchQueryChange}
+        />
+      )}
+
     </div>
   )
 }

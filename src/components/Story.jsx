@@ -5,7 +5,6 @@ import { useSocket } from '../contexts/SocketContext';
 const Story = ({ user, onBack }) => {
   const { socket, isConnected } = useSocket();
   const [stories, setStories] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [showCreateStory, setShowCreateStory] = useState(false);
   const [newStoryContent, setNewStoryContent] = useState('');
   const [newStoryMedia, setNewStoryMedia] = useState(null);
@@ -34,7 +33,6 @@ const Story = ({ user, onBack }) => {
   // Fetch stories feed (excluding current user's stories)
   const fetchStories = async () => {
     try {
-      setLoading(true);
       const response = await fetch(`${API_CONFIG.API_URL}/stories/feed`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -53,8 +51,6 @@ const Story = ({ user, onBack }) => {
       }
     } catch (error) {
       console.error('Error fetching stories:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1043,9 +1039,7 @@ const Story = ({ user, onBack }) => {
   return (
     <div className="stories-container">
       <div className="stories-content">
-        {loading ? (
-          <div className="loading">Loading stories...</div>
-        ) : stories.length === 0 && myStories.length === 0 ? (
+        {stories.length === 0 && myStories.length === 0 ? (
           <div className="empty-stories">
             <div className="empty-icon">📸</div>
             <h3>No Stories Yet</h3>

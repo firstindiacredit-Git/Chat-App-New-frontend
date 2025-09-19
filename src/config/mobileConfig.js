@@ -8,7 +8,7 @@ const getBaseURL = () => {
     return import.meta.env.VITE_API_BASE_URL || "https://chatnew.pizeonfly.com";
   } else {
     // For web development, use environment variable or localhost fallback
-    return import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+    return import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
   }
 };
 
@@ -16,7 +16,7 @@ const getSocketURL = () => {
   if (isMobile) {
     return import.meta.env.VITE_SOCKET_URL || "https://chatnew.pizeonfly.com";
   } else {
-    return import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+    return import.meta.env.VITE_SOCKET_URL || "http://localhost:8000";
   }
 };
 

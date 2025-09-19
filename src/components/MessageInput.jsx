@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSocket } from '../contexts/SocketContext'
 import { API_CONFIG } from '../config/mobileConfig';
 
-const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUserId, isGroupChat = false, userToken }) => {
+const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUserId, isGroupChat = false, userToken, isBlocked = false, blockedUserName = '' }) => {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [typingTimeout, setTypingTimeout] = useState(null);
@@ -15,7 +15,13 @@ const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUser
   const { sendMessage, startTyping, stopTyping } = useSocket();
 
   const handleSendMessage = async () => {
-    if ((!message.trim() && !selectedFile) || !receiverId || disabled) return;
+    if ((!message.trim() && !selectedFile) || !receiverId || disabled || isBlocked) return;
+    
+    // Show alert if trying to send to blocked user
+    if (isBlocked) {
+      alert(`Messaging is not available with ${blockedUserName}.`);
+      return;
+    }
 
     const messageToSend = message.trim();
     let attachment = null;
@@ -350,15 +356,15 @@ const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUser
           {/* File Upload Button */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
+            disabled={disabled || isBlocked}
             className={`
               p-2 rounded-full transition-all duration-200 flex-shrink-0
-              ${disabled 
+              ${(disabled || isBlocked)
                 ? 'text-gray-300 cursor-not-allowed' 
                 : 'text-gray-500 hover:text-green-600 hover:bg-gray-100 cursor-pointer'
               }
             `}
-            title="Attach file"
+            title={isBlocked ? `Cannot send files to blocked user` : "Attach file"}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
@@ -367,15 +373,15 @@ const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUser
 
           {/* Message Input Container */}
           <div className="flex-1 relative">
-            <div className="bg-gray-100 rounded-3xl px-4 py-2 min-h-[44px] flex items-center border border-gray-200 focus-within:border-green-500 focus-within:ring-1 focus-within:ring-green-500 transition-all duration-200">
+            <div className={`${isBlocked ? 'bg-red-50' : 'bg-gray-100'} rounded-3xl px-4 py-2 min-h-[44px] flex items-center border ${isBlocked ? 'border-red-200' : 'border-gray-200'} ${!isBlocked ? 'focus-within:border-green-500 focus-within:ring-1 focus-within:ring-green-500' : ''} transition-all duration-200`}>
               <textarea
                 ref={textareaRef}
                 value={message}
                 onChange={handleInputChange}
                 onKeyPress={handleKeyPress}
                 onBlur={handleInputBlur}
-                placeholder="Type a message..."
-                disabled={disabled}
+                placeholder={isBlocked ? `${blockedUserName} is blocked` : "Type a message..."}
+                disabled={disabled || isBlocked}
                 rows={1}
                 className={`
                   w-full resize-none border-none outline-none bg-transparent
@@ -393,15 +399,15 @@ const MessageInput = ({ receiverId, onMessageSent, disabled = false, currentUser
           {/* Send Button */}
           <button
             onClick={handleSendMessage}
-            disabled={(!message.trim() && !selectedFile) || !receiverId || disabled || isUploading}
+            disabled={(!message.trim() && !selectedFile) || !receiverId || disabled || isUploading || isBlocked}
             className={`
               w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0
-              ${(message.trim() || selectedFile) && receiverId && !disabled && !isUploading
+              ${(message.trim() || selectedFile) && receiverId && !disabled && !isUploading && !isBlocked
                 ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer shadow-lg hover:shadow-xl transform hover:scale-105' 
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }
             `}
-            title="Send message"
+            title={isBlocked ? `Cannot send messages to blocked user` : "Send message"}
           >
             {isUploading ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

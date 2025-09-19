@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 import { API_CONFIG } from '../config/mobileConfig';
 
-const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isUserInChat = true, isGroupChat = false }) => {
+const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isUserInChat = true, isGroupChat = false, onUserNameClick }) => {
   const messagesEndRef = useRef(null);
   const { socket, isConnected } = useSocket();
   
@@ -447,7 +447,7 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
           onMouseUp={handleLongPressEnd}
           onMouseLeave={handleLongPressEnd}
         >
-          {!isOwnMessage && isGroupChat && (
+          {!isOwnMessage && (isGroupChat || onUserNameClick) && (
             <div
               className="sender-name"
               style={{
@@ -455,6 +455,26 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
                 color: '#25D366',
                 fontWeight: '600',
                 marginBottom: '2px',
+                cursor: onUserNameClick ? 'pointer' : 'default',
+                textDecoration: onUserNameClick ? 'none' : 'none',
+                transition: 'all 0.2s ease',
+              }}
+              onClick={() => {
+                if (onUserNameClick && message.sender) {
+                  onUserNameClick(message.sender);
+                }
+              }}
+              onMouseEnter={(e) => {
+                if (onUserNameClick) {
+                  e.target.style.textDecoration = 'underline';
+                  e.target.style.color = '#128C7E';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (onUserNameClick) {
+                  e.target.style.textDecoration = 'none';
+                  e.target.style.color = '#25D366';
+                }
               }}
             >
               {message.sender?.name || 'Unknown'}
@@ -661,7 +681,7 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
           msOverflowStyle: 'none', /* Internet Explorer 10+ */
         }}
       >
-        <style jsx>{`
+        <style>{`
           .message-list::-webkit-scrollbar {
             display: none; /* Safari and Chrome */
           }
@@ -690,7 +710,7 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
               left: Math.max(10, Math.min(contextMenuPosition.x - 100, window.innerWidth - 210)),
               backgroundColor: 'white',
               borderRadius: '12px',
-              padding: '8px',
+              
               minWidth: '200px',
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
               border: '1px solid #e0e0e0',
@@ -698,7 +718,7 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <style jsx>{`
+            <style>{`
               @keyframes contextMenuSlideIn {
                 from {
                   opacity: 0;
@@ -719,11 +739,11 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
                 padding: '8px 12px 4px', 
                 fontWeight: '500' 
               }}>
-                React
+               
               </div>
               <div style={{ 
                 display: 'flex', 
-                gap: '8px', 
+                gap: '3px', 
                 padding: '4px 12px 8px',
                 borderBottom: '1px solid #f0f0f0'
               }}>
@@ -792,7 +812,7 @@ const MessageList = ({ messages, currentUserId, receiver, onMessageReceived, isU
                   onMouseEnter={(e) => e.target.style.backgroundColor = '#fff5f5'}
                   onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
                 >
-                  🗑️ Delete Message
+                  Delete Message
                 </button>
               )}
               

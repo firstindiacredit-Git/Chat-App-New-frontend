@@ -3,6 +3,7 @@ import { API_CONFIG } from '../config/mobileConfig'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSocket } from '../contexts/SocketContext'
 import ContactSync from './ContactSync'
+import { FcCheckmark } from "react-icons/fc";
 
 const UserList = ({ user, onLogout }) => {
   const { isUserOnline } = useSocket()
@@ -11,11 +12,19 @@ const UserList = ({ user, onLogout }) => {
   const [error, setError] = useState('')
   const [totalUsers, setTotalUsers] = useState(0)
   const [showContactSync, setShowContactSync] = useState(false)
+  const [friendStatuses, setFriendStatuses] = useState({})
+  const [loadingRequests, setLoadingRequests] = useState({})
   const navigate = useNavigate()
 
   useEffect(() => {
     fetchUsers()
   }, [])
+
+  useEffect(() => {
+    if (users.length > 0) {
+      fetchFriendStatuses()
+    }
+  }, [users])
 
   const fetchUsers = async () => {
     try {
@@ -55,6 +64,124 @@ const UserList = ({ user, onLogout }) => {
     
     // Navigate to chat page
     navigate('/chat')
+  }
+
+  const handleViewProfile = (selectedUser, event) => {
+    event.stopPropagation(); // Prevent the chat click handler
+    navigate(`/profile/${selectedUser._id}`);
+  }
+
+  // Fetch friend statuses for all users
+  const fetchFriendStatuses = async () => {
+    try {
+      const statusPromises = users.map(async (userData) => {
+        const response = await fetch(`${API_CONFIG.API_URL}/friends/status/${userData._id}`, {
+          headers: {
+            'Authorization': `Bearer ${user.token}`,
+          },
+        })
+        const data = await response.json()
+        return { userId: userData._id, status: data.success ? data.data.status : 'none', requestId: data.data?.requestId }
+      })
+
+      const statuses = await Promise.all(statusPromises)
+      const statusMap = {}
+      statuses.forEach(({ userId, status, requestId }) => {
+        statusMap[userId] = { status, requestId }
+      })
+      setFriendStatuses(statusMap)
+    } catch (error) {
+      console.error('Error fetching friend statuses:', error)
+    }
+  }
+
+  // Send friend request
+  const sendFriendRequest = async (userId) => {
+    try {
+      setLoadingRequests(prev => ({ ...prev, [userId]: true }))
+      const response = await fetch(`${API_CONFIG.API_URL}/friends/request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({ userId }),
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setFriendStatuses(prev => ({
+          ...prev,
+          [userId]: { status: 'sent', requestId: data.data.friendRequest._id }
+        }))
+      } else {
+        alert(data.message || 'Failed to send friend request')
+      }
+    } catch (error) {
+      console.error('Error sending friend request:', error)
+      alert('Error sending friend request. Please try again.')
+    } finally {
+      setLoadingRequests(prev => ({ ...prev, [userId]: false }))
+    }
+  }
+
+  // Accept friend request
+  const acceptFriendRequest = async (userId, requestId) => {
+    try {
+      setLoadingRequests(prev => ({ ...prev, [userId]: true }))
+      const response = await fetch(`${API_CONFIG.API_URL}/friends/accept/${requestId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        },
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setFriendStatuses(prev => ({
+          ...prev,
+          [userId]: { status: 'friend', requestId: null }
+        }))
+      } else {
+        alert(data.message || 'Failed to accept friend request')
+      }
+    } catch (error) {
+      console.error('Error accepting friend request:', error)
+      alert('Error accepting friend request. Please try again.')
+    } finally {
+      setLoadingRequests(prev => ({ ...prev, [userId]: false }))
+    }
+  }
+
+  // Reject friend request
+  const rejectFriendRequest = async (userId, requestId) => {
+    try {
+      setLoadingRequests(prev => ({ ...prev, [userId]: true }))
+      const response = await fetch(`${API_CONFIG.API_URL}/friends/reject/${requestId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        },
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setFriendStatuses(prev => ({
+          ...prev,
+          [userId]: { status: 'none', requestId: null }
+        }))
+      } else {
+        alert(data.message || 'Failed to reject friend request')
+      }
+    } catch (error) {
+      console.error('Error rejecting friend request:', error)
+      alert('Error rejecting friend request. Please try again.')
+    } finally {
+      setLoadingRequests(prev => ({ ...prev, [userId]: false }))
+    }
   }
 
   const handleContactSyncUserSelect = (selectedUser) => {
@@ -153,8 +280,7 @@ const UserList = ({ user, onLogout }) => {
             <div 
               key={userData._id || index} 
               className="user-item"
-              onClick={() => handleUserClick(userData)}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'default' }}
             >
               <div className="user-avatar">
                 {userData.avatar ? (
@@ -179,6 +305,180 @@ const UserList = ({ user, onLogout }) => {
                 }}>
                   {isUserOnline(userData._id) ? 'online' : 'last seen recently'}
                 </p>
+              </div>
+              
+              <div className="user-actions" style={{
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center'
+              }}>
+                {/* Only show profile button for friends */}
+                {friendStatuses[userData._id]?.status === 'friend' && (
+                  <button
+                    onClick={(e) => handleViewProfile(userData, e)}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      backgroundColor: '#f8f9fa',
+                      color: '#666',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = '#e9ecef';
+                      e.target.style.color = '#495057';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = '#f8f9fa';
+                      e.target.style.color = '#666';
+                    }}
+                    title="View Profile"
+                  >
+                    👤
+                  </button>
+                )}
+                
+                {/* Friend Request Actions */}
+                {(() => {
+                  const friendStatus = friendStatuses[userData._id];
+                  const isLoading = loadingRequests[userData._id];
+                  
+                  if (!friendStatus) return null;
+                  
+                  switch (friendStatus.status) {
+                    case 'friend':
+                      return (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUserClick(userData);
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            backgroundColor: '#25D366',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = '#128C7E';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = '#25D366';
+                          }}
+                          title="Start Chat"
+                        >
+                          💬
+                        </button>
+                      );
+                    
+                    case 'sent':
+                      return (
+                        <button
+                          disabled
+                          style={{
+                            padding: '5px 8px',
+                            fontSize: '12px',
+                            backgroundColor: 'gray',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'not-allowed',
+                            opacity: 0.8
+                          }}
+                          title="Friend request sent"
+                        >
+                          📤 Sent
+                        </button>
+                      );
+                    
+                    case 'received':
+                      return (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              acceptFriendRequest(userData._id, friendStatus.requestId);
+                            }}
+                            disabled={isLoading}
+                            style={{
+                              padding: '6px 8px',
+                              fontSize: '12px',
+                              backgroundColor: 'white',
+                              color: 'white',
+                              border: '1px solid gray',
+                              borderRadius: '6px',
+                              cursor: isLoading ? 'not-allowed' : 'pointer',
+                              opacity: isLoading ? 0.7 : 1
+                            }}
+                            title="Accept friend request"
+                          >
+                           <FcCheckmark />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              rejectFriendRequest(userData._id, friendStatus.requestId);
+                            }}
+                            disabled={isLoading}
+                            style={{
+                              padding: '6px 8px',
+                              fontSize: '12px',
+                              backgroundColor: 'white',
+                              color: 'white',
+                              border: '1px solid gray',
+                              borderRadius: '6px',
+                              cursor: isLoading ? 'not-allowed' : 'pointer',
+                              opacity: isLoading ? 0.7 : 1
+                            }}
+                            title="Reject friend request"
+                          >
+                            ❌
+                          </button>
+                        </div>
+                      );
+                    
+                    default: // 'none'
+                      return (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            sendFriendRequest(userData._id);
+                          }}
+                          disabled={isLoading}
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            backgroundColor: '#007bff',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: isLoading ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s',
+                            opacity: isLoading ? 0.7 : 1
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isLoading) {
+                              e.target.style.backgroundColor = '#0056b3';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isLoading) {
+                              e.target.style.backgroundColor = '#007bff';
+                            }
+                          }}
+                          title="Send friend request"
+                        >
+                          {isLoading ? '⏳' : '+ Add'}
+                        </button>
+                      );
+                  }
+                })()}
               </div>
             </div>
           ))

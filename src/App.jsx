@@ -5,6 +5,8 @@ import Signup from './components/Signup'
 import Chat from './components/Chat'
 import OTPVerification from './components/OTPVerification'
 import UserList from './components/UserList'
+import UserProfilePage from './components/UserProfilePage'
+import FriendRequests from './components/FriendRequests'
 import MobilePermissions from './components/MobilePermissions'
 import { SocketProvider } from './contexts/SocketContext'
 import { API_CONFIG } from './config/mobileConfig'
@@ -255,6 +257,26 @@ function App() {
             isAuthenticated ?
             <SocketProvider user={user}>
               <UserList user={user} onLogout={handleLogout} />
+            </SocketProvider> :
+            <Navigate to="/login" replace />
+          }
+        />
+        <Route
+          path="/profile/:userId"
+          element={
+            isAuthenticated ?
+            <SocketProvider user={user}>
+              <UserProfilePage user={user} />
+            </SocketProvider> :
+            <Navigate to="/login" replace />
+          }
+        />
+        <Route
+          path="/friend-requests"
+          element={
+            isAuthenticated ?
+            <SocketProvider user={user}>
+              <FriendRequests user={user} />
             </SocketProvider> :
             <Navigate to="/login" replace />
           }

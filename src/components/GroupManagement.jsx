@@ -11,6 +11,8 @@ const GroupManagement = ({ user, onBack, onGroupSelect }) => {
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [showGroupDetails, setShowGroupDetails] = useState(false)
   const [error, setError] = useState('')
+  const [groupSearchQuery, setGroupSearchQuery] = useState('')
+  const [filteredGroups, setFilteredGroups] = useState([])
 
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -22,6 +24,19 @@ const GroupManagement = ({ user, onBack, onGroupSelect }) => {
     fetchGroups()
     fetchUsers()
   }, [])
+
+  // Filter groups based on search query
+  useEffect(() => {
+    if (groupSearchQuery.trim()) {
+      const filtered = groups.filter(group =>
+        group.name.toLowerCase().includes(groupSearchQuery.toLowerCase()) ||
+        group.description?.toLowerCase().includes(groupSearchQuery.toLowerCase())
+      )
+      setFilteredGroups(filtered)
+    } else {
+      setFilteredGroups(groups)
+    }
+  }, [groups, groupSearchQuery])
 
   const fetchGroups = async () => {
     try {
@@ -364,36 +379,173 @@ const GroupManagement = ({ user, onBack, onGroupSelect }) => {
   return (
     <div className="group-management-container">
       <div className="group-header">
-        <div style={{ width: '40px' }}></div>
-        <h3>Groups ({groups.length})</h3>
-        <button 
-          className="create-group-btn"
-          onClick={() => setShowCreateGroup(true)}
-          title="Create Group"
-        >
-          +
-        </button>
+        <div className="group-search-container" style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '0 8px'
+        }}>
+          {/* Group Search Bar */}
+          <div style={{
+            flex: 1,
+            backgroundColor: '#f3f4f6',
+            borderRadius: '20px',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            border: '1px solid #e5e7eb'
+          }}>
+            <span style={{ 
+              color: '#6b7280', 
+              fontSize: '14px' 
+            }}>🔍</span>
+            <input
+              type="text"
+              value={groupSearchQuery}
+              onChange={(e) => setGroupSearchQuery(e.target.value)}
+              placeholder={`Search ${groups.length} groups...`}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                fontSize: '14px',
+                color: '#374151'
+              }}
+            />
+            {groupSearchQuery && (
+              <button
+                onClick={() => setGroupSearchQuery('')}
+                style={{
+                  color: '#6b7280',
+                  fontSize: '14px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  borderRadius: '50%',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#e5e7eb';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'transparent';
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          
+          {/* Create Group Button */}
+          <button 
+            className="create-group-btn"
+            onClick={() => setShowCreateGroup(true)}
+            title="Create Group"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#25D366',
+              color: 'white',
+              border: 'none',
+              fontSize: '20px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#128C7E';
+              e.target.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#25D366';
+              e.target.style.transform = 'scale(1)';
+            }}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="error-message">{error}</div>
       )}
 
+      {/* Search Results Info */}
+      {groupSearchQuery && (
+        <div style={{
+          padding: '8px 16px',
+          backgroundColor: '#f8f9fa',
+          borderBottom: '1px solid #e9ecef',
+          fontSize: '12px',
+          color: '#6c757d',
+          textAlign: 'center'
+        }}>
+          {filteredGroups.length > 0 ? (
+            `Found ${filteredGroups.length} group${filteredGroups.length !== 1 ? 's' : ''} matching "${groupSearchQuery}"`
+          ) : (
+            `No groups found for "${groupSearchQuery}"`
+          )}
+        </div>
+      )}
+
       <div className="groups-list">
-        {groups.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">👥</div>
-            <h3>No Groups Yet</h3>
-            <p>Create your first group to start group conversations</p>
-            <button 
-              className="btn btn-primary"
-              onClick={() => setShowCreateGroup(true)}
-            >
-              Create Group
-            </button>
-          </div>
+        {filteredGroups.length === 0 ? (
+          groupSearchQuery ? (
+            // No search results
+            <div className="empty-state">
+              <div className="empty-icon">🔍</div>
+              <h3>No Groups Found</h3>
+              <p>No groups match "{groupSearchQuery}"</p>
+              <button 
+                onClick={() => setGroupSearchQuery('')}
+                className="btn btn-secondary"
+                style={{
+                  marginTop: '12px',
+                  padding: '8px 16px',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Clear Search
+              </button>
+            </div>
+          ) : groups.length === 0 ? (
+            // No groups at all
+            <div className="empty-state">
+              <div className="empty-icon">👥</div>
+              <h3>No Groups Yet</h3>
+              <p>Create your first group to start group conversations</p>
+              <button 
+                className="btn btn-primary"
+                onClick={() => setShowCreateGroup(true)}
+                style={{
+                  marginTop: '12px',
+                  padding: '12px 24px',
+                  backgroundColor: '#25D366',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Create Group
+              </button>
+            </div>
+          ) : null
         ) : (
-          groups.map(group => (
+          filteredGroups.map(group => (
             <div 
               key={group._id} 
               className="group-item"
